@@ -210,6 +210,10 @@ model Order {
   taxCents              Int         @map("tax_cents")
   totalCents            Int         @map("total_cents")
   stripePaymentIntentId String?     @unique @map("stripe_payment_intent_id")
+  notes                 String?     @db.Text
+  contactless           Boolean     @default(false)
+  noBell                Boolean     @default(false) @map("no_bell")
+  placedAt              DateTime?   @map("placed_at")
   createdAt             DateTime    @default(now()) @map("created_at")
   updatedAt             DateTime    @updatedAt @map("updated_at")
 
