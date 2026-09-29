@@ -35,3 +35,13 @@ export function addressJson(address: UserAddress) {
     notes: address.notes,
   };
 }
+
+// Images stored as "/images/..." are served by this app; make them absolute
+// using the host the client connected to, so phones on the LAN can load them.
+export function absoluteUrl(path: string | null, req: Request) {
+  if (!path || /^https?:\/\//.test(path)) return path;
+  const url = new URL(req.url);
+  const host = req.headers.get("x-forwarded-host") ?? req.headers.get("host") ?? url.host;
+  const proto = req.headers.get("x-forwarded-proto") ?? url.protocol.replace(":", "");
+  return new URL(path, `${proto}://${host}`).toString();
+}

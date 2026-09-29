@@ -1,9 +1,10 @@
 import { db } from "@/lib/db";
 import { idParam, route } from "@/lib/http";
 import { activeStore, inStock } from "@/lib/catalog";
+import { absoluteUrl } from "@/lib/serialize";
 
 // Top-level categories that have something in stock at this store.
-export const GET = route(async (_req, ctx: RouteContext<"/api/stores/[id]/categories">) => {
+export const GET = route(async (req, ctx: RouteContext<"/api/stores/[id]/categories">) => {
   const store = await activeStore(await idParam(ctx));
   const stock = await inStock(store.id);
 
@@ -13,6 +14,6 @@ export const GET = route(async (_req, ctx: RouteContext<"/api/stores/[id]/catego
     orderBy: [{ sortOrder: "asc" }, { title: "asc" }],
   });
   return Response.json(
-    categories.map((c) => ({ id: c.id, title: c.title, description: c.description, image: c.image })),
+    categories.map((c) => ({ id: c.id, title: c.title, description: c.description, image: absoluteUrl(c.image, req) })),
   );
 });

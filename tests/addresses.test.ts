@@ -32,7 +32,9 @@ describe("user addresses", () => {
 
   it("requires the fields a delivery needs", async () => {
     const { user, token } = await makeUser();
-    const { latitude: _lat, city: _city, ...partial } = home;
+    const partial: Partial<typeof home> = { ...home };
+    delete partial.latitude;
+    delete partial.city;
     const res = await call(create, { token, params: { id: user.id }, body: { address: partial } });
     expect(res.status).toBe(422);
   });
