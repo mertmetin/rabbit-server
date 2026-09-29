@@ -6,7 +6,10 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "db:test": "node --env-file=.env.test node_modules/prisma/build/index.js migrate deploy"
   },
   "dependencies": {
     "@prisma/adapter-mariadb": "^7.10.0",

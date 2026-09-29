@@ -1,0 +1,67 @@
+import bcrypt from "bcryptjs";
+import { SignJWT, jwtVerify } from "jose";
+import type { User } from "@/generated/prisma/client";
+import { db } from "./db";
+import { forbidden, unauthorized } from "./http";
+
+const TOKEN_TTL = "30d";
+
+function secret() {
+  const value = process.env.JWT_SECRET;
+  if (!value) throw new Error("JWT_SECRET is not set.");
+  return new TextEncoder().encode(value);
+}
+
+export const hashPassword = (password: string) => bcrypt.hash(password, 12);
+export const checkPassword = (password: string, hash: string) => bcrypt.compare(password, hash);
+
+// The app decodes these claims to show the account screen.
+export function signToken(user: User) {
+  return new SignJWT({ id: user.id, name: user.name, email: user.email, phone: user.phone, role: user.role })
+    .setProtectedHeader({ alg: "HS256" })
+    .setSubject(String(user.id))
+    .setIssuedAt()
+    .setExpirationTime(TOKEN_TTL)
+    .sign(secret());
+}
+
+export async function requireUser(req: Request): Promise<User> {
+  const header = req.headers.get("authorization") ?? "";
+  const token = header.startsWith("Bearer ") ? header.slice(7) : null;
+  if (!token) throw unauthorized();
+
+  let userId: number;
+  try {
+    const { payload } = await jwtVerify(token, secret(), { algorithms: ["HS256"] });
+    userId = Number(payload.sub);
+  } catch {
+    throw unauthorized("Your session has expired. Please sign in again.");
+  }
+
+  const user = await db.user.findUnique({ where: { id: userId } });
+  if (!user || !user.phoneVerifiedAt) throw unauthorized();
+  return user;
+}
+
+// A customer may only act on their own account; admins on any.
+export function assertSelf(user: User, userId: number) {
+  if (user.id !== userId && user.role !== "admin") throw forbidden();
+}
+
+export async function requireAdmin(req: Request): Promise<User> {
+  const user = await requireUser(req);
+  if (user.role !== "admin") throw forbidden();
+  return user;
+}
+
+export function publicUser(user: User) {
+  return {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    phone: user.phone,
+    role: user.role,
+    active: user.phoneVerifiedAt !== null,
+    created_at: user.createdAt,
+  };
+}

@@ -1,0 +1,11 @@
+import path from "node:path";
+import { defineConfig } from "vitest/config";
+
+export default defineConfig({
+  resolve: { alias: { "@": path.resolve(__dirname, "src") } },
+  test: {
+    setupFiles: ["./tests/setup.ts"],
+    // Tests share one database, so run files one at a time.
+    fileParallelism: false,
+  },
+});
