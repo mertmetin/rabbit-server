@@ -6,8 +6,15 @@
 }
 
 .title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
   font-size: 32px;
   margin: 0 0 4px;
+}
+
+.logo {
+  border-radius: 10px;
 }
 
 .muted {

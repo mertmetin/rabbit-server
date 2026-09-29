@@ -23,7 +23,11 @@ export default async function Home() {
 
   return (
     <main className={styles.page}>
-      <h1 className={styles.title}>Rabbit</h1>
+      <h1 className={styles.title}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/logo.svg" alt="" width={44} height={44} className={styles.logo} />
+        Rabbit
+      </h1>
       <p className={styles.muted}>Grocery delivery API. The admin dashboard will live here.</p>
 
       <div className={styles.stats}>
