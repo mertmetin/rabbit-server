@@ -28,7 +28,7 @@ export default async function Home() {
         <img src="/logo.svg" alt="" width={44} height={44} className={styles.logo} />
         Rabbit
       </h1>
-      <p className={styles.muted}>Grocery delivery API. The admin dashboard will live here.</p>
+      <p className={styles.muted}>Grocery delivery API. <a href="/admin">Open the admin dashboard →</a></p>
 
       <div className={styles.stats}>
         <div className={styles.stat}><strong>{stores}</strong>stores</div>

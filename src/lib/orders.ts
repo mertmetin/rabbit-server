@@ -3,6 +3,8 @@ import type { Order, OrderItem, Prisma } from "@/generated/prisma/client";
 import { ApiError, badRequest, notFound } from "./http";
 import { taxCents } from "./tax";
 import { distanceKm } from "./geo";
+import { db } from "./db";
+import { stripe } from "./stripe";
 
 export const MIN_ORDER_CENTS = Number(process.env.MIN_ORDER_CENTS ?? 2000);
 
@@ -93,4 +95,23 @@ export function orderJson(order: Order & { items: OrderItem[] }) {
     placed_at: order.placedAt,
     created_at: order.createdAt,
   };
+}
+
+// Cancels an order: refunds (or voids) its payment and puts the stock back.
+export async function cancelOrder(order: Order & { items: OrderItem[] }) {
+  if (order.status === "cancelled") return order;
+
+  if (order.stripePaymentIntentId) {
+    const intent = await stripe().paymentIntents.retrieve(order.stripePaymentIntentId);
+    if (intent.status === "succeeded") {
+      await stripe().refunds.create({ payment_intent: intent.id });
+    } else if (intent.status !== "canceled") {
+      await stripe().paymentIntents.cancel(intent.id);
+    }
+  }
+
+  return db.$transaction(async (tx) => {
+    await restock(tx, order);
+    return tx.order.update({ where: { id: order.id }, data: { status: "cancelled" }, include: { items: true } });
+  });
 }

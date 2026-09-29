@@ -25,21 +25,24 @@ export function signToken(user: User) {
     .sign(secret());
 }
 
+// The active user a token belongs to, or null if it's invalid or expired.
+export async function userFromToken(token: string): Promise<User | null> {
+  try {
+    const { payload } = await jwtVerify(token, secret(), { algorithms: ["HS256"] });
+    const user = await db.user.findUnique({ where: { id: Number(payload.sub) } });
+    return user && user.phoneVerifiedAt ? user : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function requireUser(req: Request): Promise<User> {
   const header = req.headers.get("authorization") ?? "";
   const token = header.startsWith("Bearer ") ? header.slice(7) : null;
   if (!token) throw unauthorized();
 
-  let userId: number;
-  try {
-    const { payload } = await jwtVerify(token, secret(), { algorithms: ["HS256"] });
-    userId = Number(payload.sub);
-  } catch {
-    throw unauthorized("Your session has expired. Please sign in again.");
-  }
-
-  const user = await db.user.findUnique({ where: { id: userId } });
-  if (!user || !user.phoneVerifiedAt) throw unauthorized();
+  const user = await userFromToken(token);
+  if (!user) throw unauthorized("Your session has expired. Please sign in again.");
   return user;
 }
 
