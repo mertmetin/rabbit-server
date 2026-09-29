@@ -1,4 +1,5 @@
 import { z } from "zod";
+import Stripe from "stripe";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { ApiError, readJson, route } from "@/lib/http";
@@ -19,12 +20,13 @@ export const GET = route(async (req) => {
 });
 
 const placeSchema = basketSchema.extend({
+  payment_method_id: z.string().startsWith("pm_", "Choose a card."),
   notes: z.string().trim().max(500).optional(),
   contactless: z.boolean().default(false),
   no_bell: z.boolean().default(false),
 });
 
-// Places an order: prices it, reserves stock, and starts a Stripe payment.
+// Places an order: prices it, reserves stock, and charges the chosen card.
 // The order becomes "placed" once the app confirms the payment went through.
 export const POST = route(async (req) => {
   const user = await requireUser(req);
@@ -66,37 +68,36 @@ export const POST = route(async (req) => {
 
   try {
     const customer = await stripeCustomerId(user);
+    const method = await stripe().paymentMethods.retrieve(body.payment_method_id);
+    if (method.customer !== customer) throw new ApiError(404, "Card not found.");
+
+    // Charge the chosen saved card now. If the bank wants 3-D Secure, the
+    // intent comes back as requires_action and the app shows Stripe's prompt.
     const intent = await stripe().paymentIntents.create({
       amount: order.totalCents,
       currency: "cad",
       customer,
-      setup_future_usage: "off_session", // save the card for next time
-      automatic_payment_methods: { enabled: true },
+      payment_method: method.id,
+      confirm: true,
+      payment_method_types: ["card"],
       description: `Rabbit order #${order.id}`,
       metadata: { order_id: String(order.id), user_id: String(user.id) },
     });
-    const ephemeralKey = await stripe().ephemeralKeys.create({ customer }, { apiVersion: "2020-08-27" });
     await db.order.update({ where: { id: order.id }, data: { stripePaymentIntentId: intent.id } });
 
     return Response.json(
-      {
-        order: orderJson(order),
-        payment: {
-          client_secret: intent.client_secret,
-          customer_id: customer,
-          ephemeral_key: ephemeralKey.secret,
-          publishable_key: process.env.STRIPE_PUBLISHABLE_KEY,
-        },
-      },
+      { order: orderJson(order), payment: { status: intent.status, client_secret: intent.client_secret } },
       { status: 201 },
     );
   } catch (err) {
-    // Payment couldn't start: release the stock and drop the order.
+    // Payment failed or couldn't start: release the stock and drop the order.
     await db.$transaction(async (tx) => {
       await restock(tx, order);
       await tx.order.update({ where: { id: order.id }, data: { status: "cancelled" } });
     });
+    if (err instanceof ApiError) throw err;
+    if (err instanceof Stripe.errors.StripeCardError) throw new ApiError(402, err.message);
     console.error(err);
-    throw new ApiError(502, "We couldn't start the payment. Please try again.");
+    throw new ApiError(502, "We couldn't take the payment. Please try again.");
   }
 });
