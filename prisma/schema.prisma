@@ -1,0 +1,241 @@
+// Rabbit delivery database.
+// Ported from the Laravel rabbit-api migrations; money is stored in cents.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+enum Role {
+  customer
+  admin
+}
+
+enum AddressType {
+  home
+  work
+  other
+}
+
+enum CodePurpose {
+  activation
+  password_reset
+}
+
+enum OrderStatus {
+  pending_payment
+  placed
+  preparing
+  out_for_delivery
+  delivered
+  cancelled
+}
+
+model User {
+  id               Int       @id @default(autoincrement())
+  name             String
+  phone            String    @unique // 10 digits, no country code
+  email            String    @unique
+  passwordHash     String    @map("password_hash")
+  role             Role      @default(customer)
+  phoneVerifiedAt  DateTime? @map("phone_verified_at")
+  stripeCustomerId String?   @unique @map("stripe_customer_id")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  addresses         UserAddress[]
+  verificationCodes VerificationCode[]
+  paymentMethods    PaymentMethod[]
+  orders            Order[]
+
+  @@map("users")
+}
+
+// One-time SMS codes for account activation and password reset.
+model VerificationCode {
+  id        Int         @id @default(autoincrement())
+  userId    Int         @map("user_id")
+  purpose   CodePurpose
+  codeHash  String      @map("code_hash")
+  attempts  Int         @default(0)
+  expiresAt DateTime    @map("expires_at")
+  usedAt    DateTime?   @map("used_at")
+  createdAt DateTime    @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, purpose])
+  @@map("verification_codes")
+}
+
+model UserAddress {
+  id           Int         @id @default(autoincrement())
+  userId       Int         @map("user_id")
+  type         AddressType @default(home)
+  label        String?
+  addressLine1 String      @map("address_line_1")
+  addressLine2 String?     @map("address_line_2")
+  city         String
+  provinceCode String      @map("province_code") // e.g. ON
+  postalCode   String?     @map("postal_code")
+  countryCode  String      @default("CA") @map("country_code")
+  latitude     Decimal     @db.Decimal(9, 6)
+  longitude    Decimal     @db.Decimal(9, 6)
+  notes        String?
+  createdAt    DateTime    @default(now()) @map("created_at")
+  updatedAt    DateTime    @updatedAt @map("updated_at")
+
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orders Order[]
+
+  @@index([userId])
+  @@map("user_addresses")
+}
+
+model Store {
+  id               Int     @id @default(autoincrement())
+  name             String
+  latitude         Decimal @db.Decimal(9, 6)
+  longitude        Decimal @db.Decimal(9, 6)
+  deliveryRadiusKm Decimal @default(10) @map("delivery_radius_km") @db.Decimal(5, 2)
+  active           Boolean @default(true)
+
+  inventory Inventory[]
+  orders    Order[]
+
+  @@map("stores")
+}
+
+model ProductCategory {
+  id          Int      @id @default(autoincrement())
+  title       String
+  description String?
+  image       String?
+  parentId    Int?     @map("parent_id")
+  sortOrder   Int      @default(0) @map("sort_order")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  parent   ProductCategory?  @relation("CategoryTree", fields: [parentId], references: [id])
+  children ProductCategory[] @relation("CategoryTree")
+  products Product[]
+
+  @@map("product_categories")
+}
+
+model Product {
+  id          Int      @id @default(autoincrement())
+  title       String
+  description String   @db.Text
+  priceCents  Int      @map("price_cents")
+  categoryId  Int      @map("category_id")
+  image       String
+  taxable     Boolean  @default(false) // basic groceries are zero-rated in Canada
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  category   ProductCategory @relation(fields: [categoryId], references: [id])
+  inventory  Inventory[]
+  orderItems OrderItem[]
+
+  @@index([categoryId])
+  @@map("products")
+}
+
+model Inventory {
+  id        Int      @id @default(autoincrement())
+  storeId   Int      @map("store_id")
+  productId Int      @map("product_id")
+  quantity  Int
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  store   Store   @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([storeId, productId])
+  @@map("inventory")
+}
+
+model Promotion {
+  id          Int      @id @default(autoincrement())
+  title       String
+  description String   @db.Text
+  image       String
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("promotions")
+}
+
+model City {
+  id   Int    @id @default(autoincrement())
+  name String
+
+  @@map("cities")
+}
+
+// A saved card. Card numbers never touch this server: the app collects
+// them with Stripe's SDK and we keep only Stripe's id and display details.
+model PaymentMethod {
+  id                    Int      @id @default(autoincrement())
+  userId                Int      @map("user_id")
+  stripePaymentMethodId String   @unique @map("stripe_payment_method_id")
+  brand                 String
+  last4                 String
+  expMonth              Int      @map("exp_month")
+  expYear               Int      @map("exp_year")
+  createdAt             DateTime @default(now()) @map("created_at")
+
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orders Order[]
+
+  @@index([userId])
+  @@map("payment_methods")
+}
+
+model Order {
+  id                    Int         @id @default(autoincrement())
+  userId                Int         @map("user_id")
+  storeId               Int         @map("store_id")
+  addressId             Int?        @map("address_id")
+  paymentMethodId       Int?        @map("payment_method_id")
+  status                OrderStatus @default(pending_payment)
+  // Copy of the delivery address at order time, so later edits don't rewrite history.
+  deliveryAddress       Json        @map("delivery_address")
+  subtotalCents         Int         @map("subtotal_cents")
+  taxCents              Int         @map("tax_cents")
+  totalCents            Int         @map("total_cents")
+  stripePaymentIntentId String?     @unique @map("stripe_payment_intent_id")
+  createdAt             DateTime    @default(now()) @map("created_at")
+  updatedAt             DateTime    @updatedAt @map("updated_at")
+
+  user          User           @relation(fields: [userId], references: [id])
+  store         Store          @relation(fields: [storeId], references: [id])
+  address       UserAddress?   @relation(fields: [addressId], references: [id], onDelete: SetNull)
+  paymentMethod PaymentMethod? @relation(fields: [paymentMethodId], references: [id], onDelete: SetNull)
+  items         OrderItem[]
+
+  @@index([userId])
+  @@index([storeId, status])
+  @@map("orders")
+}
+
+model OrderItem {
+  id             Int     @id @default(autoincrement())
+  orderId        Int     @map("order_id")
+  productId      Int     @map("product_id")
+  title          String // product title at order time
+  unitPriceCents Int     @map("unit_price_cents")
+  quantity       Int
+  taxable        Boolean
+
+  order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id])
+
+  @@index([orderId])
+  @@map("order_items")
+}
