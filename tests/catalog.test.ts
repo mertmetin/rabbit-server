@@ -3,6 +3,7 @@ import { GET as closest } from "@/app/api/stores/closest/route";
 import { GET as categories } from "@/app/api/stores/[id]/categories/route";
 import { GET as products } from "@/app/api/stores/[id]/products/route";
 import { GET as search } from "@/app/api/search/route";
+import { GET as popular } from "@/app/api/stores/[id]/popular/route";
 import { POST as setStock } from "@/app/api/inventory/route";
 import { POST as createStore } from "@/app/api/stores/route";
 import { makeCatalog, makeUser } from "./factories";
@@ -88,5 +89,23 @@ describe("admin-only store management", () => {
 
     const hits = await get(search, `/api/search?store_id=${centre.id}&q=banana`);
     expect(hits.body.hits).toHaveLength(1);
+  });
+});
+
+describe("popular products", () => {
+  it("lists what the store has in stock, best sellers first", async () => {
+    const { centre, carrots, apples } = await makeCatalog();
+    const { user } = await makeUser();
+    const { db } = await import("@/lib/db");
+    await db.order.create({
+      data: {
+        userId: user.id, storeId: centre.id, status: "delivered", deliveryAddress: {},
+        subtotalCents: 229, taxCents: 0, totalCents: 229,
+        items: { create: [{ productId: carrots.id, title: "Carrots", unitPriceCents: 229, quantity: 3, taxable: false }] },
+      },
+    });
+
+    const { body } = await get(popular, "/", { id: centre.id });
+    expect(body.map((p: { id: number }) => p.id)).toEqual([carrots.id, apples.id]);
   });
 });
