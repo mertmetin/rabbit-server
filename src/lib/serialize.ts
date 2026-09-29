@@ -1,0 +1,37 @@
+import type { Product, UserAddress } from "@/generated/prisma/client";
+
+// JSON shapes the app reads. Field names stay snake_case to match the app.
+
+export function productJson(product: Product, quantity?: number) {
+  return {
+    id: product.id,
+    title: product.title,
+    description: product.description,
+    price: product.priceCents / 100,
+    price_cents: product.priceCents,
+    image: product.image,
+    taxable: product.taxable,
+    category_id: product.categoryId,
+    ...(quantity === undefined ? {} : { quantity }),
+  };
+}
+
+export function addressJson(address: UserAddress) {
+  return {
+    id: address.id,
+    user_id: address.userId,
+    // The app reads both `address_type.type` and `icon` for the type.
+    address_type: { type: address.type },
+    icon: address.type,
+    label: address.label,
+    address_line_1: address.addressLine1,
+    address_line_2: address.addressLine2,
+    city: address.city,
+    zone_code: address.provinceCode,
+    postal_code: address.postalCode,
+    country_code: address.countryCode,
+    latitude: Number(address.latitude),
+    longitude: Number(address.longitude),
+    notes: address.notes,
+  };
+}
