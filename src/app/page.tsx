@@ -1,69 +1,44 @@
-import Image from "next/image";
+import { db } from "@/lib/db";
 import styles from "./page.module.css";
 
-export default function Home() {
+export const dynamic = "force-dynamic";
+
+// Landing page for the backend: what's in the database and where the API lives.
+export default async function Home() {
+  const [stores, products, customers, orders] = await Promise.all([
+    db.store.count({ where: { active: true } }),
+    db.product.count(),
+    db.user.count({ where: { role: "customer" } }),
+    db.order.count(),
+  ]);
+  const firstStore = await db.store.findFirst({ where: { active: true }, orderBy: { id: "asc" } });
+
+  const links = [
+    "/api/stores",
+    "/api/stores/closest?lat=45.4236&lng=-75.7009",
+    firstStore && `/api/stores/${firstStore.id}/categories`,
+    firstStore && `/api/search?store_id=${firstStore.id}&q=apple`,
+    "/api/promotions",
+  ].filter(Boolean) as string[];
+
   return (
-    <div className={styles.page}>
-      <main className={styles.main}>
-        <Image
-          className={styles.logo}
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className={styles.intro}>
-          <h1>
-            To get started, edit the{" "}
-            <code className={styles.code}>page.tsx</code> file.
-          </h1>
-          <p>
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className={styles.ctas}>
-          <a
-            className={styles.primary}
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className={styles.logo}
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className={styles.secondary}
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
+    <main className={styles.page}>
+      <h1 className={styles.title}>Rabbit</h1>
+      <p className={styles.muted}>Grocery delivery API. The admin dashboard will live here.</p>
+
+      <div className={styles.stats}>
+        <div className={styles.stat}><strong>{stores}</strong>stores</div>
+        <div className={styles.stat}><strong>{products}</strong>products</div>
+        <div className={styles.stat}><strong>{customers}</strong>customers</div>
+        <div className={styles.stat}><strong>{orders}</strong>orders</div>
+      </div>
+
+      <h2>Try the API</h2>
+      <ul className={styles.endpoints}>
+        {links.map((href) => (
+          <li key={href}><a href={href}>{href}</a></li>
+        ))}
+      </ul>
+    </main>
   );
 }
