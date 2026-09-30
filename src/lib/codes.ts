@@ -48,6 +48,7 @@ export async function issueCode(user: User, purpose: CodePurpose) {
   ]);
   // Ends with the code so iOS can offer it above the keyboard.
   await sendSms(user.phone, `${MESSAGES[purpose]} ${code}. It expires in 10 minutes.`);
+  return code;
 }
 
 // Marks the code used if it matches; otherwise counts a failed attempt.

@@ -9,6 +9,7 @@ vi.mock("@/lib/sms", () => ({
   sendSms: async (phone: string, text: string) => {
     sentSms.push({ phone, text });
   },
+  smsIsFake: () => false,
 }));
 
 beforeEach(async () => {

@@ -18,10 +18,13 @@ vi.mock("@aws-sdk/client-sns", () => ({
   },
 }));
 
+const realFetch = globalThis.fetch;
 afterEach(() => {
   sent.length = 0;
   fail = false;
   delete process.env.SMS_PROVIDER;
+  globalThis.fetch = realFetch;
+  vi.unstubAllEnvs();
 });
 
 describe("sending SMS", () => {
@@ -50,5 +53,36 @@ describe("sending SMS", () => {
     expect(sent).toEqual([]);
     expect(log).toHaveBeenCalledWith("[sms] to +16135550101: Your Rabbit code is 123456.");
     log.mockRestore();
+  });
+
+  it("sends through Twilio", async () => {
+    process.env.SMS_PROVIDER = "twilio";
+    vi.stubEnv("TWILIO_ACCOUNT_SID", "AC123");
+    vi.stubEnv("TWILIO_AUTH_TOKEN", "secret");
+    vi.stubEnv("TWILIO_FROM", "+16135550000");
+    const calls: { url: string; body: string; auth: string }[] = [];
+    globalThis.fetch = (async (url: string, init: RequestInit) => {
+      calls.push({ url, body: String(init.body), auth: (init.headers as Record<string, string>).authorization });
+      return new Response("{}", { status: 201 });
+    }) as typeof fetch;
+
+    const { sendSms } = await import("@/lib/sms");
+    await sendSms("6135550101", "Your Rabbit code is 123456.");
+    expect(calls[0].url).toBe("https://api.twilio.com/2010-04-01/Accounts/AC123/Messages.json");
+    expect(Object.fromEntries(new URLSearchParams(calls[0].body))).toEqual({
+      To: "+16135550101", From: "+16135550000", Body: "Your Rabbit code is 123456.",
+    });
+    expect(calls[0].auth).toBe(`Basic ${Buffer.from("AC123:secret").toString("base64")}`);
+  });
+
+  it("shows codes in the app only when texts are fake on a development machine", async () => {
+    const { smsIsFake } = await import("@/lib/sms");
+    vi.stubEnv("NODE_ENV", "development");
+    expect(smsIsFake()).toBe(true);
+    process.env.SMS_PROVIDER = "sns";
+    expect(smsIsFake()).toBe(false);
+    delete process.env.SMS_PROVIDER;
+    vi.stubEnv("NODE_ENV", "production");
+    expect(smsIsFake()).toBe(false);
   });
 });

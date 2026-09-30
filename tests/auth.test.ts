@@ -27,7 +27,7 @@ describe("sign in with an SMS code", () => {
     expect(sentSms).toHaveLength(1);
     expect(sentSms[0].phone).toBe("6135550101");
     expect(lastCode()).toMatch(/^\d{6}$/);
-    expect(JSON.stringify(res.body)).not.toContain(lastCode());
+    expect(JSON.stringify(res.body)).not.toContain(lastCode()); // tests run with NODE_ENV=test
   });
 
   it("signs in with the right code; new accounts need a name and email", async () => {
