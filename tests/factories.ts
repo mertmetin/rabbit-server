@@ -3,7 +3,7 @@ import { signToken, hashPassword } from "@/lib/auth";
 
 let seq = 0;
 
-export async function makeUser(overrides: { role?: "customer" | "admin" } = {}) {
+export async function makeUser(overrides: { role?: "customer" | "driver" | "admin" } = {}) {
   seq++;
   const user = await db.user.create({
     data: {

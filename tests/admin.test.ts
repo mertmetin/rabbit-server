@@ -27,9 +27,10 @@ async function placedOrder() {
 }
 
 describe("admin: orders", () => {
-  it("moves an order through preparing, out for delivery, delivered", async () => {
+  it("moves an order through preparing, ready, out for delivery, delivered", async () => {
     const { order } = await placedOrder();
     expect(await advanceOrder(order.id)).toBe("preparing");
+    expect(await advanceOrder(order.id)).toBe("ready");
     expect(await advanceOrder(order.id)).toBe("out_for_delivery");
     expect(await advanceOrder(order.id)).toBe("delivered");
     await expect(advanceOrder(order.id)).rejects.toThrow(/can't move forward/);
@@ -47,7 +48,7 @@ describe("admin: orders", () => {
 
   it("won't cancel a delivered order", async () => {
     const { order } = await placedOrder();
-    for (let i = 0; i < 3; i++) await advanceOrder(order.id);
+    for (let i = 0; i < 4; i++) await advanceOrder(order.id);
     await expect(cancelOrderAsAdmin(order.id)).rejects.toThrow(/Delivered/);
   });
 

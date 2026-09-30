@@ -3,11 +3,13 @@ import type { OrderStatus } from "@/generated/prisma/client";
 import { db } from "./db";
 import { ApiError, notFound } from "./http";
 import { cancelOrder } from "./orders";
+import { normalizePhone } from "./phone";
 
 // The order lifecycle staff move orders through.
 export const NEXT_STATUS: Partial<Record<OrderStatus, OrderStatus>> = {
   placed: "preparing",
-  preparing: "out_for_delivery",
+  preparing: "ready",
+  ready: "out_for_delivery", // normally done by the driver's "Picked up"
   out_for_delivery: "delivered",
 };
 
@@ -15,12 +17,13 @@ export const STATUS_LABEL: Record<OrderStatus, string> = {
   pending_payment: "Awaiting payment",
   placed: "New",
   preparing: "Preparing",
+  ready: "Ready for pickup",
   out_for_delivery: "Out for delivery",
   delivered: "Delivered",
   cancelled: "Cancelled",
 };
 
-export const ACTIVE_STATUSES: OrderStatus[] = ["placed", "preparing", "out_for_delivery"];
+export const ACTIVE_STATUSES: OrderStatus[] = ["placed", "preparing", "ready", "out_for_delivery"];
 export const LOW_STOCK = 5;
 
 export async function advanceOrder(orderId: number) {
@@ -29,7 +32,8 @@ export async function advanceOrder(orderId: number) {
   const next = NEXT_STATUS[order.status];
   if (!next) throw new ApiError(409, `A ${STATUS_LABEL[order.status].toLowerCase()} order can't move forward.`);
   // Conditional update: two staff clicking at once can't skip a step.
-  const { count } = await db.order.updateMany({ where: { id: orderId, status: order.status }, data: { status: next } });
+  const stamps = next === "out_for_delivery" ? { pickedUpAt: new Date() } : next === "delivered" ? { deliveredAt: new Date() } : {};
+  const { count } = await db.order.updateMany({ where: { id: orderId, status: order.status }, data: { status: next, ...stamps } });
   if (count === 0) throw new ApiError(409, "This order was just updated by someone else.");
   return next;
 }
@@ -107,4 +111,24 @@ export async function dashboardStats(now = new Date()) {
     activeOrders: active,
     lowStock,
   };
+}
+
+// Makes a phone number a driver (new or existing account). They sign in to
+// the driver app with that number and an SMS code.
+export async function addDriver(phoneInput: string, name: string) {
+  const phone = normalizePhone(phoneInput);
+  if (!phone) throw new ApiError(400, "Enter a 10-digit phone number.");
+  const existing = await db.user.findUnique({ where: { phone } });
+  if (existing?.role === "admin") throw new ApiError(409, "That number belongs to an admin.");
+  return db.user.upsert({
+    where: { phone },
+    update: { role: "driver", ...(name.trim() && !existing?.name ? { name: name.trim() } : {}) },
+    create: { phone, name: name.trim(), role: "driver" },
+  });
+}
+
+export async function removeDriver(userId: number) {
+  const active = await db.order.count({ where: { driverId: userId, status: { in: ["placed", "preparing", "ready", "out_for_delivery"] } } });
+  if (active > 0) throw new ApiError(409, "This driver still has deliveries in progress.");
+  await db.user.updateMany({ where: { id: userId, role: "driver" }, data: { role: "customer", driverOnline: false, driverStoreId: null } });
 }

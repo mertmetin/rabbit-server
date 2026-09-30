@@ -11,7 +11,8 @@ export const dynamic = "force-dynamic";
 
 const ADVANCE_LABEL = {
   placed: "Start preparing",
-  preparing: "Out for delivery",
+  preparing: "Ready for pickup",
+  ready: "Out for delivery",
   out_for_delivery: "Mark delivered",
 } as const;
 
@@ -20,7 +21,7 @@ type Address = { label?: string; address_line_1?: string; address_line_2?: strin
 export default async function OrderPage({ params }: PageProps<"/admin/orders/[id]">) {
   const id = Number((await params).id);
   const order = Number.isInteger(id)
-    ? await db.order.findUnique({ where: { id }, include: { items: { include: { product: true } }, user: true, store: true } })
+    ? await db.order.findUnique({ where: { id }, include: { items: { include: { product: true } }, user: true, store: true, driver: true } })
     : null;
   if (!order) notFound();
 
@@ -100,6 +101,9 @@ export default async function OrderPage({ params }: PageProps<"/admin/orders/[id
             <h2 className={styles.cardTitle}>Details</h2>
             <dl className={styles.kv}>
               <dt>Store</dt><dd>{order.store.name}</dd>
+              <dt>Driver</dt><dd>{order.driver ? `${order.driver.name || "Driver"} · ${order.driver.phone}` : "Not assigned yet"}</dd>
+              {order.pickedUpAt && (<><dt>Picked up</dt><dd>{when(order.pickedUpAt)}</dd></>)}
+              {order.deliveredAt && (<><dt>Delivered</dt><dd>{when(order.deliveredAt)}</dd></>)}
               <dt>Placed</dt><dd>{when(order.placedAt)}</dd>
               <dt>Payment</dt><dd>{order.stripePaymentIntentId ?? "—"}</dd>
             </dl>

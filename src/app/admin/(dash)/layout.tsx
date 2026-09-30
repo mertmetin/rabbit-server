@@ -19,6 +19,7 @@ export default async function AdminLayout({ children }: LayoutProps<"/admin">) {
         <Link className={styles.navLink} href="/admin/orders">Orders</Link>
         <Link className={styles.navLink} href="/admin/products">Products</Link>
         <Link className={styles.navLink} href="/admin/stock">Stock</Link>
+        <Link className={styles.navLink} href="/admin/drivers">Drivers</Link>
         <div className={styles.sidebarFooter}>
           <div>{admin.name}</div>
           <form action={logout}>

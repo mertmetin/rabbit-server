@@ -12,7 +12,7 @@ const FILTERS: Record<string, { label: string; statuses: OrderStatus[] }> = {
   active: { label: "Open", statuses: ACTIVE_STATUSES },
   delivered: { label: "Delivered", statuses: ["delivered"] },
   cancelled: { label: "Cancelled", statuses: ["cancelled"] },
-  all: { label: "All", statuses: ["placed", "preparing", "out_for_delivery", "delivered", "cancelled"] },
+  all: { label: "All", statuses: ["placed", "preparing", "ready", "out_for_delivery", "delivered", "cancelled"] },
 };
 
 export default async function OrdersPage({ searchParams }: PageProps<"/admin/orders">) {

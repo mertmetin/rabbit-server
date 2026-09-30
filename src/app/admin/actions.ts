@@ -9,7 +9,7 @@ import { checkPassword, signToken } from "@/lib/auth";
 import { normalizePhone } from "@/lib/phone";
 import { ApiError } from "@/lib/http";
 import { ADMIN_COOKIE, requireAdmin } from "@/lib/admin-session";
-import { advanceOrder, cancelOrderAsAdmin, saveProduct, setStock } from "@/lib/admin";
+import { addDriver, advanceOrder, cancelOrderAsAdmin, removeDriver, saveProduct, setStock } from "@/lib/admin";
 
 // Every action checks the admin session itself: server actions can be
 // called directly, not just from these pages.
@@ -95,4 +95,21 @@ export async function saveStockAction(_state: FormState, form: FormData): Promis
   }
   revalidatePath("/admin", "layout");
   return { ok: "Stock saved." };
+}
+
+export async function addDriverAction(_state: FormState, form: FormData): Promise<FormState> {
+  await requireAdmin();
+  try {
+    await addDriver(String(form.get("phone") ?? ""), String(form.get("name") ?? ""));
+  } catch (err) {
+    return { error: message(err) };
+  }
+  revalidatePath("/admin/drivers");
+  return { ok: "Driver added. They can sign in to the Rabbit Driver app with this number." };
+}
+
+export async function removeDriverAction(form: FormData) {
+  await requireAdmin();
+  await removeDriver(Number(form.get("userId"))).catch(() => {});
+  revalidatePath("/admin/drivers");
 }

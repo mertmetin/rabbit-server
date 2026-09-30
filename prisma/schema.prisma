@@ -12,6 +12,7 @@ datasource db {
 
 enum Role {
   customer
+  driver
   admin
 }
 
@@ -31,6 +32,7 @@ enum OrderStatus {
   pending_payment
   placed
   preparing
+  ready // packed, waiting for the driver
   out_for_delivery
   delivered
   cancelled
@@ -45,6 +47,9 @@ model User {
   role             Role      @default(customer)
   phoneVerifiedAt  DateTime? @map("phone_verified_at")
   stripeCustomerId String?   @unique @map("stripe_customer_id")
+  // Drivers: whether they're taking orders, and from which store.
+  driverOnline     Boolean   @default(false) @map("driver_online")
+  driverStoreId    Int?      @map("driver_store_id")
   createdAt        DateTime  @default(now()) @map("created_at")
   updatedAt        DateTime  @updatedAt @map("updated_at")
 
@@ -52,6 +57,8 @@ model User {
   verificationCodes VerificationCode[]
   paymentMethods    PaymentMethod[]
   orders            Order[]
+  deliveries        Order[]       @relation("OrderDriver")
+  driverStore       Store?        @relation("DriverStore", fields: [driverStoreId], references: [id], onDelete: SetNull)
 
   @@map("users")
 }
@@ -107,6 +114,7 @@ model Store {
 
   inventory Inventory[]
   orders    Order[]
+  drivers   User[]      @relation("DriverStore")
 
   @@map("stores")
 }
@@ -215,10 +223,18 @@ model Order {
   contactless           Boolean     @default(false)
   noBell                Boolean     @default(false) @map("no_bell")
   placedAt              DateTime?   @map("placed_at")
+  driverId              Int?        @map("driver_id")
+  pickedUpAt            DateTime?   @map("picked_up_at")
+  deliveredAt           DateTime?   @map("delivered_at")
+  // The driver's latest position while this order is on the way.
+  driverLatitude        Decimal?    @map("driver_latitude") @db.Decimal(9, 6)
+  driverLongitude       Decimal?    @map("driver_longitude") @db.Decimal(9, 6)
+  driverLocatedAt       DateTime?   @map("driver_located_at")
   createdAt             DateTime    @default(now()) @map("created_at")
   updatedAt             DateTime    @updatedAt @map("updated_at")
 
   user          User           @relation(fields: [userId], references: [id])
+  driver        User?          @relation("OrderDriver", fields: [driverId], references: [id], onDelete: SetNull)
   store         Store          @relation(fields: [storeId], references: [id])
   address       UserAddress?   @relation(fields: [addressId], references: [id], onDelete: SetNull)
   paymentMethod PaymentMethod? @relation(fields: [paymentMethodId], references: [id], onDelete: SetNull)
@@ -226,6 +242,7 @@ model Order {
 
   @@index([userId])
   @@index([storeId, status])
+  @@index([driverId, status])
   @@map("orders")
 }
 

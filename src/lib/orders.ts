@@ -93,7 +93,14 @@ export function orderJson(order: Order & { items: OrderItem[] }) {
       line_total: (i.unitPriceCents * i.quantity) / 100,
     })),
     placed_at: order.placedAt,
+    picked_up_at: order.pickedUpAt,
+    delivered_at: order.deliveredAt,
     created_at: order.createdAt,
+    // Only while this order is on its way.
+    driver_location:
+      order.status === "out_for_delivery" && order.driverLatitude !== null && order.driverLongitude !== null
+        ? { latitude: Number(order.driverLatitude), longitude: Number(order.driverLongitude), updated_at: order.driverLocatedAt }
+        : null,
   };
 }
 
