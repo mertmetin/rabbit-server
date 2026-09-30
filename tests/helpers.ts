@@ -5,11 +5,12 @@ type Handler = (req: Request, ctx: { params: Promise<Record<string, string>> }) 
 // Calls a route handler the way Next.js would and returns status + JSON body.
 export async function call(
   handler: unknown,
-  opts: { method?: string; body?: unknown; token?: string; params?: Record<string, string | number> } = {},
+  opts: { method?: string; body?: unknown; token?: string; params?: Record<string, string | number>; query?: Record<string, string | number> } = {},
 ) {
   const headers: Record<string, string> = { "content-type": "application/json" };
   if (opts.token) headers.authorization = `Bearer ${opts.token}`;
-  const req = new Request("http://test.local/api", {
+  const query = new URLSearchParams(Object.entries(opts.query ?? {}).map(([k, v]) => [k, String(v)]));
+  const req = new Request(`http://test.local/api${opts.query ? `?${query}` : ""}`, {
     method: opts.method ?? "POST",
     headers,
     body: opts.body === undefined ? undefined : JSON.stringify(opts.body),
