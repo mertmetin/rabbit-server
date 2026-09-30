@@ -95,6 +95,7 @@ export function orderJson(order: Order & { items: OrderItem[] }) {
     placed_at: order.placedAt,
     picked_up_at: order.pickedUpAt,
     delivered_at: order.deliveredAt,
+    has_photo: Boolean(order.deliveryPhoto),
     created_at: order.createdAt,
     // Only while this order is on its way.
     driver_location:

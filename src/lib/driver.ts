@@ -41,6 +41,7 @@ export function driverOrderJson(order: FullOrder) {
     total: order.totalCents / 100,
     placed_at: order.placedAt,
     picked_up_at: order.pickedUpAt,
+    has_photo: Boolean(order.deliveryPhoto),
   };
 }
 

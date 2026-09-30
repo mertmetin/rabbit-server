@@ -132,3 +132,45 @@ describe("admin: drivers", () => {
     await expect(removeDriver(driver.user.id)).rejects.toThrow(/in progress/);
   });
 });
+
+describe("delivery photo", () => {
+  const upload = (handler: unknown, token: string, id: number, file: File) => {
+    const form = new FormData();
+    form.append("photo", file);
+    const req = new Request("http://test.local/api", { method: "POST", headers: { authorization: `Bearer ${token}` }, body: form });
+    return (handler as (r: Request, c: unknown) => Promise<Response>)(req, { params: Promise.resolve({ id: String(id) }) });
+  };
+  const jpeg = () => new File([new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3])], "door.jpg", { type: "image/jpeg" });
+
+  it("the driver adds a photo at drop-off; the customer can see it, others can't", async () => {
+    const { POST: photo } = await import("@/app/api/driver/orders/[id]/photo/route");
+    const { GET: viewPhoto } = await import("@/app/api/orders/[id]/photo/route");
+    process.env.STORAGE_DIR = `${process.cwd()}/storage-files-test`;
+    const { driver, customer, newOrder, goOnline } = await setup();
+    const order = await newOrder();
+    await goOnline();
+    await call(accept, { token: driver.token, params: { id: order.id } });
+
+    expect((await upload(photo, driver.token, order.id, jpeg())).status).toBe(409); // not picked up yet
+    await advanceOrder(order.id);
+    await advanceOrder(order.id);
+    await call(pickup, { token: driver.token, params: { id: order.id } });
+
+    const bad = await upload(photo, driver.token, order.id, new File(["hi"], "x.txt", { type: "text/plain" }));
+    expect(bad.status).toBe(400);
+    expect((await upload(photo, driver.token, order.id, jpeg())).status).toBe(201);
+
+    const seen = await (viewPhoto as (r: Request, c: unknown) => Promise<Response>)(
+      new Request("http://test.local/api", { headers: { authorization: `Bearer ${customer.token}` } }),
+      { params: Promise.resolve({ id: String(order.id) }) },
+    );
+    expect(seen.status).toBe(200);
+    expect(seen.headers.get("content-type")).toBe("image/jpeg");
+    expect(new Uint8Array(await seen.arrayBuffer()).slice(0, 2)).toEqual(new Uint8Array([0xff, 0xd8]));
+
+    const stranger = await makeUser();
+    const blocked = await call(viewPhoto, { method: "GET", token: stranger.token, params: { id: order.id } });
+    expect(blocked.status).toBe(404);
+    expect((await call(customerOrder, { method: "GET", token: customer.token, params: { id: order.id } })).body.has_photo).toBe(true);
+  });
+});

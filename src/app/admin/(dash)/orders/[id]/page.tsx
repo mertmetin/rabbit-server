@@ -104,6 +104,13 @@ export default async function OrderPage({ params }: PageProps<"/admin/orders/[id
               <dt>Driver</dt><dd>{order.driver ? `${order.driver.name || "Driver"} · ${order.driver.phone}` : "Not assigned yet"}</dd>
               {order.pickedUpAt && (<><dt>Picked up</dt><dd>{when(order.pickedUpAt)}</dd></>)}
               {order.deliveredAt && (<><dt>Delivered</dt><dd>{when(order.deliveredAt)}</dd></>)}
+              {order.deliveryPhoto && (
+                <>
+                  <dt>Photo</dt>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <dd><a href={`/admin/orders/${order.id}/photo`} target="_blank"><img className={styles.preview} src={`/admin/orders/${order.id}/photo`} alt="Where the driver left the order" /></a></dd>
+                </>
+              )}
               <dt>Placed</dt><dd>{when(order.placedAt)}</dd>
               <dt>Payment</dt><dd>{order.stripePaymentIntentId ?? "—"}</dd>
             </dl>

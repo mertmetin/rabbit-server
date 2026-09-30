@@ -226,6 +226,7 @@ model Order {
   driverId              Int?        @map("driver_id")
   pickedUpAt            DateTime?   @map("picked_up_at")
   deliveredAt           DateTime?   @map("delivered_at")
+  deliveryPhoto         String?     @map("delivery_photo") // storage key of the driver's doorstep photo
   // The driver's latest position while this order is on the way.
   driverLatitude        Decimal?    @map("driver_latitude") @db.Decimal(9, 6)
   driverLongitude       Decimal?    @map("driver_longitude") @db.Decimal(9, 6)
