@@ -5,7 +5,6 @@ import { db } from "./db";
 import { forbidden, unauthorized } from "./http";
 
 const TOKEN_TTL = "30d";
-const SETUP_TTL = "15m";
 
 function secret() {
   const value = process.env.JWT_SECRET;
@@ -26,34 +25,12 @@ export function signToken(user: User) {
     .sign(secret());
 }
 
-// Short-lived proof that someone just confirmed this phone number by SMS code.
-// It only allows setting a password (and name/email), never normal API use.
-export function signSetupToken(user: User) {
-  return new SignJWT({ purpose: "setup" })
-    .setProtectedHeader({ alg: "HS256" })
-    .setSubject(String(user.id))
-    .setIssuedAt()
-    .setExpirationTime(SETUP_TTL)
-    .sign(secret());
-}
-
-export async function userFromSetupToken(token: string): Promise<User | null> {
-  try {
-    const { payload } = await jwtVerify(token, secret(), { algorithms: ["HS256"] });
-    if (payload.purpose !== "setup") return null;
-    return db.user.findUnique({ where: { id: Number(payload.sub) } });
-  } catch {
-    return null;
-  }
-}
-
 // The active user a token belongs to, or null if it's invalid or expired.
 export async function userFromToken(token: string): Promise<User | null> {
   try {
     const { payload } = await jwtVerify(token, secret(), { algorithms: ["HS256"] });
-    if (payload.purpose) return null; // setup tokens can't be used as sessions
     const user = await db.user.findUnique({ where: { id: Number(payload.sub) } });
-    return user && user.phoneVerifiedAt && user.passwordHash ? user : null;
+    return user && user.phoneVerifiedAt ? user : null;
   } catch {
     return null;
   }
@@ -88,7 +65,7 @@ export function publicUser(user: User) {
     phone: user.phone,
     role: user.role,
     active: user.phoneVerifiedAt !== null,
-
+    needs_profile: !user.name || !user.email,
     created_at: user.createdAt,
   };
 }
