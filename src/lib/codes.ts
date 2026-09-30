@@ -13,12 +13,15 @@ const hashCode = (code: string) =>
   createHmac("sha256", process.env.JWT_SECRET!).update(code).digest("hex");
 
 const MESSAGES: Record<CodePurpose, string> = {
+  login: "Your Rabbit code is",
   activation: "Your Rabbit activation code is",
   password_reset: "Your Rabbit password reset code is",
 };
 
-// Texts a fresh 4-digit code (the app's code input has 4 boxes) and
-// retires any earlier unused code for the same purpose.
+// Sign-in codes are the only thing protecting an account, so they're 6 digits.
+const DIGITS: Record<CodePurpose, number> = { login: 6, activation: 4, password_reset: 4 };
+
+// Texts a fresh code and retires any earlier unused code for the same purpose.
 export async function issueCode(user: User, purpose: CodePurpose) {
   const now = Date.now();
   const recent = await db.verificationCode.findMany({
@@ -32,7 +35,8 @@ export async function issueCode(user: User, purpose: CodePurpose) {
     throw new ApiError(429, "Too many codes requested. Try again in an hour.");
   }
 
-  const code = String(randomInt(0, 10_000)).padStart(4, "0");
+  const digits = DIGITS[purpose];
+  const code = String(randomInt(0, 10 ** digits)).padStart(digits, "0");
   await db.$transaction([
     db.verificationCode.updateMany({
       where: { userId: user.id, purpose, usedAt: null },
@@ -42,7 +46,8 @@ export async function issueCode(user: User, purpose: CodePurpose) {
       data: { userId: user.id, purpose, codeHash: hashCode(code), expiresAt: new Date(now + CODE_TTL_MS) },
     }),
   ]);
-  await sendSms(user.phone, `${MESSAGES[purpose]} ${code}`);
+  // Ends with the code so iOS can offer it above the keyboard.
+  await sendSms(user.phone, `${MESSAGES[purpose]} ${code}. It expires in 10 minutes.`);
 }
 
 // Marks the code used if it matches; otherwise counts a failed attempt.

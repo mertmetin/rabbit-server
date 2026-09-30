@@ -12,6 +12,7 @@ vi.mock("@/lib/sms", () => ({
 }));
 
 beforeEach(async () => {
+  (await import("@/lib/rate-limit")).resetRateLimits();
   sentSms.length = 0;
   const { db } = await import("@/lib/db");
   const tables = await db.$queryRawUnsafe<{ name: string }[]>(

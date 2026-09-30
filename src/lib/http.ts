@@ -42,7 +42,9 @@ function errorResponse(err: unknown): Response {
     );
   }
   if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
-    return Response.json({ message: "This account is already registered." }, { status: 409 });
+    const field = JSON.stringify(err.meta ?? {});
+    const message = field.includes("email") ? "That email is already used by another account." : "This account is already registered.";
+    return Response.json({ message }, { status: 409 });
   }
   console.error(err);
   return Response.json({ message: "Something went wrong." }, { status: 500 });

@@ -13,7 +13,7 @@ function secret() {
 }
 
 export const hashPassword = (password: string) => bcrypt.hash(password, 12);
-export const checkPassword = (password: string, hash: string) => bcrypt.compare(password, hash);
+export const checkPassword = (password: string, hash: string | null) => (hash ? bcrypt.compare(password, hash) : Promise.resolve(false));
 
 // The app decodes these claims to show the account screen.
 export function signToken(user: User) {
@@ -65,6 +65,7 @@ export function publicUser(user: User) {
     phone: user.phone,
     role: user.role,
     active: user.phoneVerifiedAt !== null,
+    needs_profile: !user.name || !user.email,
     created_at: user.createdAt,
   };
 }

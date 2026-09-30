@@ -17,9 +17,9 @@ export function stripe(): Stripe {
 export async function stripeCustomerId(user: User): Promise<string> {
   if (user.stripeCustomerId) return user.stripeCustomerId;
   const customer = await stripe().customers.create({
-    email: user.email,
+    email: user.email ?? undefined,
     phone: `+1${user.phone}`,
-    name: user.name,
+    name: user.name || undefined,
     metadata: { user_id: String(user.id) },
   });
   await db.user.update({ where: { id: user.id }, data: { stripeCustomerId: customer.id } });

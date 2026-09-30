@@ -24,6 +24,7 @@ enum AddressType {
 enum CodePurpose {
   activation
   password_reset
+  login
 }
 
 enum OrderStatus {
@@ -37,10 +38,10 @@ enum OrderStatus {
 
 model User {
   id               Int       @id @default(autoincrement())
-  name             String
+  name             String    @default("") // asked after the first sign-in
   phone            String    @unique // 10 digits, no country code
-  email            String    @unique
-  passwordHash     String    @map("password_hash")
+  email            String?   @unique
+  passwordHash     String?   @map("password_hash") // admins only; customers sign in by SMS code
   role             Role      @default(customer)
   phoneVerifiedAt  DateTime? @map("phone_verified_at")
   stripeCustomerId String?   @unique @map("stripe_customer_id")
@@ -55,7 +56,7 @@ model User {
   @@map("users")
 }
 
-// One-time SMS codes for account activation and password reset.
+// One-time SMS codes (sign-in; activation and password_reset are legacy).
 model VerificationCode {
   id        Int         @id @default(autoincrement())
   userId    Int         @map("user_id")

@@ -23,5 +23,5 @@ export async function call(
 export function lastCode(): string {
   const sms = sentSms.at(-1);
   if (!sms) throw new Error("No SMS was sent.");
-  return sms.text.match(/(\d{4})$/)![1];
+  return sms.text.match(/code is (\d+)/)![1];
 }

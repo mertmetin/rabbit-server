@@ -24,7 +24,7 @@ export async function login(_state: FormState, form: FormData): Promise<FormStat
   const password = String(form.get("password") ?? "");
   const user = phone ? await db.user.findUnique({ where: { phone } }) : null;
 
-  if (!user || !(await checkPassword(password, user.passwordHash)) || user.role !== "admin" || !user.phoneVerifiedAt) {
+  if (!user || user.role !== "admin" || !user.phoneVerifiedAt || !(await checkPassword(password, user.passwordHash))) {
     return { error: "Wrong phone number or password, or not an admin account." };
   }
 
