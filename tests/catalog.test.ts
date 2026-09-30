@@ -4,9 +4,11 @@ import { GET as categories } from "@/app/api/stores/[id]/categories/route";
 import { GET as products } from "@/app/api/stores/[id]/products/route";
 import { GET as search } from "@/app/api/search/route";
 import { GET as popular } from "@/app/api/stores/[id]/popular/route";
+import { GET as variants } from "@/app/api/stores/[id]/products/[productId]/variants/route";
 import { POST as setStock } from "@/app/api/inventory/route";
 import { POST as createStore } from "@/app/api/stores/route";
 import { makeCatalog, makeUser } from "./factories";
+import { db } from "@/lib/db";
 import { call } from "./helpers";
 
 type Handler = (req: Request, ctx: { params: Promise<Record<string, string>> }) => Promise<Response>;
@@ -107,5 +109,55 @@ describe("popular products", () => {
 
     const { body } = await get(popular, "/", { id: centre.id });
     expect(body.map((p: { id: number }) => p.id)).toEqual([carrots.id, apples.id]);
+  });
+});
+
+describe("product variants", () => {
+  // Milk at Centre: 2% 4 L (the group's first product), 1% 4 L, and 2% 2 L out of stock.
+  async function makeMilk() {
+    const catalog = await makeCatalog();
+    const { centre, produce } = catalog;
+    const group = await db.productGroup.create({
+      data: { title: "Milk", options: [{ name: "Milk fat", values: ["1%", "2%"] }, { name: "Size", values: ["2 L", "4 L"] }] },
+    });
+    const variant = (title: string, priceCents: number, options: Record<string, string>) =>
+      db.product.create({ data: { title, description: "Milk", priceCents, categoryId: produce.id, image: "https://img.test/milk.jpg", groupId: group.id, options } });
+    const twoFour = await variant("2% milk, 4 L", 649, { "Milk fat": "2%", Size: "4 L" });
+    const oneFour = await variant("1% milk, 4 L", 649, { "Milk fat": "1%", Size: "4 L" });
+    const twoTwo = await variant("2% milk, 2 L", 479, { "Milk fat": "2%", Size: "2 L" });
+    await db.inventory.createMany({
+      data: [
+        { storeId: centre.id, productId: twoFour.id, quantity: 8 },
+        { storeId: centre.id, productId: oneFour.id, quantity: 3 },
+        { storeId: centre.id, productId: twoTwo.id, quantity: 0 },
+      ],
+    });
+    return { ...catalog, group, twoFour, oneFour, twoTwo };
+  }
+
+  it("lists a group once, as its first in-stock variant with a count", async () => {
+    const { centre, produce, group, twoFour } = await makeMilk();
+    const { body } = await get(products, `/api/stores/${centre.id}/products?category=${produce.id}`, { id: centre.id });
+    const milk = body[0].data.filter((p: { group_id: number | null }) => p.group_id === group.id);
+    expect(milk).toEqual([expect.objectContaining({ id: twoFour.id, variant_count: 2, options: { "Milk fat": "2%", Size: "4 L" } })]);
+  });
+
+  it("shows a group once among popular products", async () => {
+    const { centre, group } = await makeMilk();
+    const { body } = await get(popular, "/", { id: centre.id });
+    expect(body.filter((p: { group_id: number | null }) => p.group_id === group.id)).toHaveLength(1);
+  });
+
+  it("returns the group's options and in-stock variants", async () => {
+    const { centre, twoFour, oneFour } = await makeMilk();
+    const { body } = await get(variants, "/", { id: centre.id, productId: oneFour.id });
+    expect(body.options).toEqual([{ name: "Milk fat", values: ["1%", "2%"] }, { name: "Size", values: ["2 L", "4 L"] }]);
+    expect(body.variants.map((v: { id: number }) => v.id)).toEqual([twoFour.id, oneFour.id]);
+  });
+
+  it("treats a product outside a group as its only variant", async () => {
+    const { centre, apples } = await makeCatalog();
+    const { body } = await get(variants, "/", { id: centre.id, productId: apples.id });
+    expect(body).toEqual({ options: [], variants: [expect.objectContaining({ id: apples.id, group_id: null })] });
   });
 });

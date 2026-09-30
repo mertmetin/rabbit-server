@@ -24,3 +24,18 @@ export function inStock(storeId: number) {
     include: { product: { include: { category: true } } },
   });
 }
+
+// One entry per variant group (the first of its variants in the list), with
+// variant_count saying how many of the group's variants the list holds.
+// Products outside a group pass through unchanged.
+export function oneTilePerGroup<T extends { group_id: number | null }>(items: T[]) {
+  const counts = new Map<number, number>();
+  for (const item of items) if (item.group_id !== null) counts.set(item.group_id, (counts.get(item.group_id) ?? 0) + 1);
+  const seen = new Set<number>();
+  return items.flatMap((item) => {
+    if (item.group_id === null) return [item];
+    if (seen.has(item.group_id)) return [];
+    seen.add(item.group_id);
+    return [{ ...item, variant_count: counts.get(item.group_id)! }];
+  });
+}

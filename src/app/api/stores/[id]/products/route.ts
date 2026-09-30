@@ -1,10 +1,11 @@
 import { z } from "zod";
 import { idParam, route } from "@/lib/http";
-import { activeStore, inStock } from "@/lib/catalog";
+import { activeStore, inStock, oneTilePerGroup } from "@/lib/catalog";
 import { productJson } from "@/lib/serialize";
 
 // Products in a top-level category, grouped into sections by subcategory
-// (the shape of the app's SectionList: [{ title, data: [...] }]).
+// (the shape of the app's SectionList: [{ title, data: [...] }]), with a
+// single tile for each group of variants.
 export const GET = route(async (req, ctx: RouteContext<"/api/stores/[id]/products">) => {
   const store = await activeStore(await idParam(ctx));
   const { category } = z
@@ -25,7 +26,7 @@ export const GET = route(async (req, ctx: RouteContext<"/api/stores/[id]/product
 
   const result = [...sections.values()]
     .sort((a, b) => a.sortOrder - b.sortOrder || a.title.localeCompare(b.title))
-    .map(({ id, title, data }) => ({ id, title, data: data.sort((a, b) => a.title.localeCompare(b.title)) }));
+    .map(({ id, title, data }) => ({ id, title, data: oneTilePerGroup(data.sort((a, b) => a.id - b.id)).sort((a, b) => a.title.localeCompare(b.title)) }));
 
   return Response.json(result);
 });

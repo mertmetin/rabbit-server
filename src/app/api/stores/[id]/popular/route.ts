@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { idParam, route } from "@/lib/http";
-import { activeStore } from "@/lib/catalog";
+import { activeStore, oneTilePerGroup } from "@/lib/catalog";
 import { productJson } from "@/lib/serialize";
 
 const LIMIT = 12;
@@ -24,10 +24,12 @@ export const GET = route(async (_req, ctx: RouteContext<"/api/stores/[id]/popula
     include: { product: true },
   });
 
-  const popular = stock
-    .sort((a, b) => (rank.get(a.productId) ?? Infinity) - (rank.get(b.productId) ?? Infinity) || a.productId - b.productId)
-    .slice(0, LIMIT)
-    .map(({ product, quantity }) => productJson(product, quantity));
+  // A variant group shows once, as its best-selling in-stock variant.
+  const popular = oneTilePerGroup(
+    stock
+      .sort((a, b) => (rank.get(a.productId) ?? Infinity) - (rank.get(b.productId) ?? Infinity) || a.productId - b.productId)
+      .map(({ product, quantity }) => productJson(product, quantity)),
+  ).slice(0, LIMIT);
 
   return Response.json(popular);
 });

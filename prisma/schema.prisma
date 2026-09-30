@@ -144,15 +144,34 @@ model Product {
   categoryId  Int      @map("category_id")
   image       String
   taxable     Boolean  @default(false) // basic groceries are zero-rated in Canada
+  // Variants of one item (2% milk, 4 L) share a group; options holds this
+  // variant's value for each of the group's options, e.g. { "Size": "4 L" }.
+  groupId     Int?     @map("group_id")
+  options     Json?
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
   category   ProductCategory @relation(fields: [categoryId], references: [id])
+  group      ProductGroup?   @relation(fields: [groupId], references: [id])
   inventory  Inventory[]
   orderItems OrderItem[]
 
   @@index([categoryId])
+  @@index([groupId])
   @@map("products")
+}
+
+// A family of product variants shown as one tile with option chips.
+// options lists each option and its values in display order, e.g.
+// [{ "name": "Milk fat", "values": ["Skim", "1%", "2%", "3.25%"] }].
+// The group's first product (lowest id) is the one its tile shows.
+model ProductGroup {
+  id       Int       @id @default(autoincrement())
+  title    String
+  options  Json
+  products Product[]
+
+  @@map("product_groups")
 }
 
 model Inventory {

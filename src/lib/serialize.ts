@@ -12,6 +12,8 @@ export function productJson(product: Product, quantity?: number) {
     image: product.image,
     taxable: product.taxable,
     category_id: product.categoryId,
+    group_id: product.groupId,
+    options: product.options,
     ...(quantity === undefined ? {} : { quantity }),
   };
 }

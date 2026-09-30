@@ -3,6 +3,7 @@
 // promotions, and two sign-in accounts.
 // Re-running replaces the catalogue (until orders exist); accounts are kept.
 import "dotenv/config";
+import { readFileSync } from "node:fs";
 import bcrypt from "bcryptjs";
 import { PrismaMariaDb } from "@prisma/adapter-mariadb";
 import { PrismaClient } from "../src/generated/prisma/client";
@@ -19,7 +20,59 @@ const photo = (id: string) => `https://images.unsplash.com/photo-${id}?w=600&h=6
 // only: a store name for items that store alone carries.
 type Options = { taxable?: boolean; only?: "Ottawa Centre" | "Ottawa East" };
 type ProductRow = readonly [string, string, number, string, Options?];
-type Category = { title: string; products?: readonly ProductRow[]; children?: { title: string; products: readonly ProductRow[] }[] };
+// A family of variants shown as one tile with option chips; its first
+// variant is the one the tile shows.
+type Variant = { title: string; priceCents: number; image: string; options: Record<string, string> };
+type VariantGroup = { title: string; variants: Variant[] };
+type Aisle = { title: string; products?: readonly ProductRow[]; groups?: VariantGroup[] };
+type Category = Aisle & { children?: Aisle[] };
+
+// Aisles kept as CSV (prisma/data/*.csv) so they can be edited in a
+// spreadsheet. Columns: subcategory, group, title, price, options, image.
+// Rows sharing a group become one tile; options reads "Flavour: Vanilla |
+// Size: 650 g". A blank image uses the subcategory's placeholder photo.
+function csvAisles(file: string, placeholders: Record<string, string>): Aisle[] {
+  const [, ...rows] = parseCsv(readFileSync(new URL(`./data/${file}`, import.meta.url), "utf8"));
+  const aisles = new Map<string, { products: ProductRow[]; groups: Map<string, VariantGroup> }>();
+  for (const [subcategory, group, title, price, options, image] of rows) {
+    const aisle = aisles.get(subcategory) ?? { products: [], groups: new Map<string, VariantGroup>() };
+    aisles.set(subcategory, aisle);
+    const priceCents = Math.round(Number(price) * 100);
+    const photoId = image || placeholders[subcategory];
+    if (!group) {
+      aisle.products.push([title, "", priceCents, photoId]);
+      continue;
+    }
+    const variants = aisle.groups.get(group)?.variants ?? [];
+    aisle.groups.set(group, { title: group, variants });
+    const pairs = options.split("|").map((pair) => pair.split(":").map((part) => part.trim()));
+    variants.push({ title, priceCents, image: photo(photoId), options: Object.fromEntries(pairs) });
+  }
+  return [...aisles].map(([title, { products, groups }]) => ({ title, products, groups: [...groups.values()] }));
+}
+
+// Amounts (milk fat, sizes, pack counts) smallest first: "Skim", "1%", "2%";
+// "1 L", "2 L", "4 L"; "4 x 100 g", "650 g". Anything else (flavours) keeps
+// the order it was written in.
+function inOrder(values: string[]) {
+  const unit: Record<string, number> = { "": 1, "%": 1, g: 1, ml: 1, kg: 1000, l: 1000 };
+  const amount = (value: string) => {
+    if (value === "Skim") return 0;
+    const m = value.match(/^(?:(\d+)\s*x\s*)?(\d+(?:\.\d+)?)\s*(%|g|kg|ml|l)?$/i);
+    return m ? Number(m[1] ?? 1) * Number(m[2]) * unit[(m[3] ?? "").toLowerCase()] : NaN;
+  };
+  return values.every((value) => !Number.isNaN(amount(value))) ? [...values].sort((a, b) => amount(a) - amount(b)) : values;
+}
+
+// Enough CSV for these files: commas, and quoted fields with "" escapes.
+function parseCsv(text: string) {
+  const rows: string[][] = [];
+  for (const line of text.split(/\r?\n/).filter(Boolean)) {
+    const fields = [...line.matchAll(/(?:^|,)(?:"((?:[^"]|"")*)"|([^,]*))/g)];
+    rows.push(fields.map((m) => (m[1] !== undefined ? m[1].replace(/""/g, '"') : m[2])));
+  }
+  return rows;
+}
 
 const catalog: Category[] = [
   { title: "Drinks", products: [
@@ -41,17 +94,15 @@ const catalog: Category[] = [
       ["Avocados, 4 pack", "Hass avocados, ripen on the counter.", 599, "1718829732697-740b87cf509b"], // John Cameron
     ] },
   ] },
-  { title: "Dairy", products: [
-    ["2% milk, 2 L", "Fresh Canadian 2% milk.", 479, "1523473827533-2a64d0d36748"], // Mehrshad Rajabi
-    ["Aged cheddar, 400 g", "Sharp two-year aged cheddar.", 799, "1700760933494-8a322667a3f4"], // Farhad Ibrahimzade
-    ["Greek yogurt, 750 g", "Plain 2% Greek yogurt.", 549, "1763825613390-287a9db0803d"], // Nikita Khowala
-  ] },
+  { title: "Dairy & Eggs", children: csvAisles("dairy-eggs.csv", {
+    Milk: "1523473827533-2a64d0d36748", // Mehrshad Rajabi
+    Yogurt: "1763825613390-287a9db0803d", // Nikita Khowala
+  }) },
   { title: "Snacks", products: [
     ["Dark chocolate with almonds, 100 g", "70% dark chocolate with whole almonds.", 349, "1720029106261-0d0396bb270d", { taxable: true }], // D. Stoyanova
     ["Oatmeal cookies, 12 pack", "Chewy oatmeal cookies, baked in Ottawa.", 499, "1554886729-fe8d4499a108", { only: "Ottawa East" }], // Hayley Maxwell
   ] },
   { title: "Breakfast", products: [
-    ["Large brown eggs, dozen", "Grade A large brown eggs.", 499, "1760745271267-c8ec89f0b6d1"], // Evvlus
     ["Maple granola, 500 g", "Oat clusters with Canadian maple.", 649, "1622542086073-dcdc3350cc2b"], // ABHISHEK HAJARE
   ] },
   { title: "Bakery", products: [
@@ -106,6 +157,7 @@ async function main() {
   await db.$transaction([
     db.inventory.deleteMany(),
     db.product.deleteMany(),
+    db.productGroup.deleteMany(),
     db.productCategory.deleteMany({ where: { parentId: { not: null } } }),
     db.productCategory.deleteMany(),
     db.promotion.deleteMany(),
@@ -133,15 +185,44 @@ async function main() {
     }
   };
 
+  const addGroup = async (categoryId: number, group: VariantGroup) => {
+    // Each option's values in the order the variants first use them.
+    const options = new Map<string, string[]>();
+    for (const variant of group.variants)
+      for (const [name, value] of Object.entries(variant.options)) {
+        const values = options.get(name) ?? [];
+        if (!values.includes(value)) values.push(value);
+        options.set(name, values);
+      }
+    const { id: groupId } = await db.productGroup.create({
+      data: { title: group.title, options: [...options].map(([name, values]) => ({ name, values: inOrder(values) })) },
+    });
+    for (const { title, priceCents, image, options } of group.variants) {
+      const product = await db.product.create({
+        data: { title, description: "", priceCents, image, categoryId, groupId, options },
+      });
+      for (const store of stores) stock.push({ storeId: store.id, productId: product.id, quantity: 10 + ((count * 7) % 30) });
+      count++;
+    }
+  };
+
+  const addAisle = async (categoryId: number, aisle: Aisle) => {
+    for (const group of aisle.groups ?? []) await addGroup(categoryId, group);
+    if (aisle.products) await addProducts(categoryId, aisle.products);
+  };
   for (const [i, top] of catalog.entries()) {
-    // A category's tile shows its first product's photo.
-    const first = top.products?.[0] ?? top.children![0].products[0];
-    const parent = await db.productCategory.create({ data: { title: top.title, image: photo(first[3]), sortOrder: i } });
-    if (top.products) await addProducts(parent.id, top.products);
+    const parent = await db.productCategory.create({ data: { title: top.title, sortOrder: i } });
+    await addAisle(parent.id, top);
     for (const [j, child] of (top.children ?? []).entries()) {
       const sub = await db.productCategory.create({ data: { title: child.title, parentId: parent.id, sortOrder: j } });
-      await addProducts(sub.id, child.products);
+      await addAisle(sub.id, child);
     }
+    // A category's tile shows its first product's photo.
+    const first = await db.product.findFirstOrThrow({
+      where: { OR: [{ categoryId: parent.id }, { category: { parentId: parent.id } }] },
+      orderBy: { id: "asc" },
+    });
+    await db.productCategory.update({ where: { id: parent.id }, data: { image: first.image } });
   }
 
   // One basic sold out at Ottawa East, to show out-of-stock items disappearing.
