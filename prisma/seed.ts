@@ -149,12 +149,11 @@ const catalog: Category[] = [
 ];
 
 async function main() {
-  // Orders keep references to products, so only rebuild the catalogue before any exist.
-  if ((await db.orderItem.count()) > 0) {
-    console.log("Orders exist; leaving the catalogue as it is.");
-    return;
-  }
-  await db.$transaction([
+  // Orders keep references to products, so the catalogue is only rebuilt
+  // before any exist. After that, re-running adds categories that are new
+  // (by title) and leaves everything else as it is.
+  const hasOrders = (await db.orderItem.count()) > 0;
+  if (!hasOrders) await db.$transaction([
     db.inventory.deleteMany(),
     db.product.deleteMany(),
     db.productGroup.deleteMany(),
@@ -210,8 +209,10 @@ async function main() {
     for (const group of aisle.groups ?? []) await addGroup(categoryId, group);
     if (aisle.products) await addProducts(categoryId, aisle.products);
   };
-  for (const [i, top] of catalog.entries()) {
-    const parent = await db.productCategory.create({ data: { title: top.title, sortOrder: i } });
+  const existing = new Set((await db.productCategory.findMany({ where: { parentId: null } })).map((c) => c.title));
+  const added = catalog.filter((top) => !existing.has(top.title));
+  for (const top of added) {
+    const parent = await db.productCategory.create({ data: { title: top.title, sortOrder: catalog.indexOf(top) } });
     await addAisle(parent.id, top);
     for (const [j, child] of (top.children ?? []).entries()) {
       const sub = await db.productCategory.create({ data: { title: child.title, parentId: parent.id, sortOrder: j } });
@@ -226,9 +227,15 @@ async function main() {
   }
 
   // One basic sold out at Ottawa East, to show out-of-stock items disappearing.
-  const blueberries = await db.product.findFirstOrThrow({ where: { title: { startsWith: "Blueberries" } } });
-  for (const row of stock) if (row.storeId === east.id && row.productId === blueberries.id) row.quantity = 0;
+  const blueberries = await db.product.findFirst({ where: { title: { startsWith: "Blueberries" } } });
+  for (const row of stock) if (row.storeId === east.id && row.productId === blueberries?.id) row.quantity = 0;
   await db.inventory.createMany({ data: stock });
+
+  if (hasOrders) {
+    const names = added.map((top) => top.title).join(", ") || "none";
+    console.log(`Orders exist, so the catalogue was kept. New categories added: ${names} (${count} products).`);
+    return;
+  }
 
   await db.promotion.createMany({
     data: [
