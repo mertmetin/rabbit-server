@@ -123,3 +123,32 @@ export async function cancelOrder(order: Order & { items: OrderItem[] }) {
     return tx.order.update({ where: { id: order.id }, data: { status: "cancelled" }, include: { items: true } });
   });
 }
+
+// Marks an order paid (idempotent): used by the app's confirm call and the
+// Stripe webhook, whichever arrives first.
+export async function markPaid(orderId: number) {
+  await db.order.updateMany({
+    where: { id: orderId, status: "pending_payment" },
+    data: { status: "placed", placedAt: new Date() },
+  });
+}
+
+export const ABANDONED_AFTER_MS = 30 * 60 * 1000;
+
+// Cancels checkouts that were never paid and puts their stock back. Stripe
+// payments still open on them are voided so they can't complete later.
+export async function releaseAbandonedOrders(now = new Date(), storeId?: number) {
+  const stale = await db.order.findMany({
+    where: {
+      status: "pending_payment",
+      createdAt: { lt: new Date(now.getTime() - ABANDONED_AFTER_MS) },
+      ...(storeId ? { storeId } : {}),
+    },
+    include: { items: true },
+    take: 50,
+  });
+  for (const order of stale) {
+    await cancelOrder(order).catch((err) => console.error(`[orders] couldn't release #${order.id}:`, err));
+  }
+  return stale.length;
+}

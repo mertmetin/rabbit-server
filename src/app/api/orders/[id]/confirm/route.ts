@@ -1,7 +1,7 @@
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { ApiError, idParam, notFound, route } from "@/lib/http";
-import { orderJson } from "@/lib/orders";
+import { markPaid, orderJson } from "@/lib/orders";
 import { stripe } from "@/lib/stripe";
 
 // Called by the app after the payment sheet closes. Stripe is the source of
@@ -19,10 +19,7 @@ export const POST = route(async (req, ctx: RouteContext<"/api/orders/[id]/confir
     throw new ApiError(402, "The payment hasn't gone through yet.");
   }
 
-  const placed = await db.order.update({
-    where: { id: order.id },
-    data: { status: "placed", placedAt: new Date() },
-    include: { items: true },
-  });
+  await markPaid(order.id);
+  const placed = await db.order.findUniqueOrThrow({ where: { id: order.id }, include: { items: true } });
   return Response.json(orderJson(placed));
 });

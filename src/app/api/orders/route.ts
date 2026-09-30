@@ -3,7 +3,7 @@ import Stripe from "stripe";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { ApiError, readJson, route } from "@/lib/http";
-import { basketSchema, deliveryContext, MIN_ORDER_CENTS, orderJson, priceBasket, restock } from "@/lib/orders";
+import { basketSchema, deliveryContext, MIN_ORDER_CENTS, orderJson, priceBasket, releaseAbandonedOrders, restock } from "@/lib/orders";
 import { stripe, stripeCustomerId } from "@/lib/stripe";
 import { addressJson } from "@/lib/serialize";
 
@@ -31,6 +31,8 @@ const placeSchema = basketSchema.extend({
 export const POST = route(async (req) => {
   const user = await requireUser(req);
   const body = await readJson(req, placeSchema);
+  // Free up stock held by checkouts that were abandoned before paying.
+  await releaseAbandonedOrders(new Date(), body.store_id);
 
   const order = await db.$transaction(async (tx) => {
     const { address } = await deliveryContext(tx, user.id, body.store_id, body.address_id);
