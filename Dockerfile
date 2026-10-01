@@ -31,7 +31,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-cert
 WORKDIR /app
 ENV NODE_ENV=production PORT=8080 HOSTNAME=0.0.0.0 \
     DATABASE_TLS=true NODE_EXTRA_CA_CERTS=/app/certs/rds-ca.pem
-ADD --chmod=644 https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem /app/certs/rds-ca.pem
+ADD https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem /app/certs/rds-ca.pem
+RUN chmod 755 /app/certs && chmod 644 /app/certs/rds-ca.pem
 COPY --from=migrate /migrate /migrate
 COPY --from=build /app/.next/standalone ./
 COPY --from=build /app/.next/static ./.next/static
