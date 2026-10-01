@@ -1,0 +1,38 @@
+{
+  "family": "rabbit-server",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "runtimePlatform": { "cpuArchitecture": "X86_64", "operatingSystemFamily": "LINUX" },
+  "cpu": "256",
+  "memory": "1024",
+  "executionRoleArn": "arn:aws:iam::401157843245:role/rabbit-ecs-execution",
+  "taskRoleArn": "arn:aws:iam::401157843245:role/rabbit-server-task",
+  "containerDefinitions": [
+    {
+      "name": "rabbit-server",
+      "image": "401157843245.dkr.ecr.ca-central-1.amazonaws.com/rabbit-server:latest",
+      "essential": true,
+      "portMappings": [{ "containerPort": 8080, "protocol": "tcp" }],
+      "environment": [
+        { "name": "AWS_REGION", "value": "ca-central-1" },
+        { "name": "SMS_PROVIDER", "value": "sns" },
+        { "name": "STORAGE_BUCKET", "value": "rabbit-delivery-photos-401157843245" }
+      ],
+      "secrets": [
+        { "name": "DATABASE_URL", "valueFrom": "arn:aws:ssm:ca-central-1:401157843245:parameter/rabbit/prod/database-url" },
+        { "name": "JWT_SECRET", "valueFrom": "arn:aws:ssm:ca-central-1:401157843245:parameter/rabbit/prod/jwt-secret" },
+        { "name": "CRON_SECRET", "valueFrom": "arn:aws:ssm:ca-central-1:401157843245:parameter/rabbit/prod/cron-secret" },
+        { "name": "STRIPE_SECRET_KEY", "valueFrom": "arn:aws:ssm:ca-central-1:401157843245:parameter/rabbit/prod/stripe-secret-key" },
+        { "name": "CHATWOOT_HMAC_TOKEN", "valueFrom": "arn:aws:ssm:ca-central-1:401157843245:parameter/rabbit/prod/chatwoot-hmac-token" }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/rabbit-server",
+          "awslogs-region": "ca-central-1",
+          "awslogs-stream-prefix": "server"
+        }
+      }
+    }
+  ]
+}
