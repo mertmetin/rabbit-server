@@ -12,7 +12,9 @@ COPY . .
 RUN npx prisma generate && \
     DATABASE_URL=mysql://build:build@localhost:3306/build npm run build
 
-# Prisma CLI on its own, only for `migrate deploy` at startup.
+# Prisma CLI on its own for `migrate deploy` at startup, plus what the
+# one-off scripts need (prisma/seed.ts with SEED_CATALOG_ONLY=1, and
+# prisma/create-admin.ts), run with ECS Exec from /migrate.
 FROM node:22-bookworm-slim AS migrate
 RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates && rm -rf /var/lib/apt/lists/*
 WORKDIR /migrate
@@ -21,6 +23,8 @@ RUN npm ci --no-audit --no-fund && \
     rm -rf node_modules/next node_modules/@next node_modules/react-dom node_modules/typescript node_modules/eslint* node_modules/@typescript-eslint
 COPY prisma ./prisma
 COPY prisma.config.ts ./
+COPY --from=build /app/src/generated ./src/generated
+COPY src/lib/phone.ts ./src/lib/phone.ts
 
 FROM node:22-bookworm-slim
 RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates && rm -rf /var/lib/apt/lists/*

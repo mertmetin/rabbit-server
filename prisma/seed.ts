@@ -8,9 +8,15 @@ import bcrypt from "bcryptjs";
 import { PrismaMariaDb } from "@prisma/adapter-mariadb";
 import { PrismaClient } from "../src/generated/prisma/client";
 
-if (process.env.NODE_ENV === "production") throw new Error("Refusing to seed a production database.");
+// Production gets the catalogue only (SEED_CATALOG_ONLY=1): no demo accounts,
+// and only into an empty database, since re-running rebuilds the catalogue.
+const production = process.env.NODE_ENV === "production";
+const catalogOnly = process.env.SEED_CATALOG_ONLY === "1";
+if (production && !catalogOnly) throw new Error("Refusing to seed a production database (set SEED_CATALOG_ONLY=1 for the catalogue).");
 
-const db = new PrismaClient({ adapter: new PrismaMariaDb(process.env.DATABASE_URL!) });
+const url = new URL(process.env.DATABASE_URL!);
+if (process.env.DATABASE_TLS === "true") url.searchParams.set("ssl", "true");
+const db = new PrismaClient({ adapter: new PrismaMariaDb(url.toString()) });
 
 // Product photos from Unsplash (free to use under the Unsplash License).
 const photo = (id: string) => `https://images.unsplash.com/photo-${id}?w=600&h=600&fit=crop&auto=format&q=80`;
@@ -149,6 +155,8 @@ const catalog: Category[] = [
 ];
 
 async function main() {
+  if (production && (await db.product.count()) > 0) throw new Error("This database already has a catalogue; not touching it.");
+
   // Orders keep references to products, so the catalogue is only rebuilt
   // before any exist. After that, re-running adds categories that are new
   // (by title) and leaves everything else as it is.
@@ -244,6 +252,11 @@ async function main() {
     ],
   });
   await db.city.create({ data: { name: "Ottawa" } });
+
+  if (catalogOnly) {
+    console.log(`Seeded ${stores.length} stores, ${catalog.length} categories, ${count} products (catalogue only, no accounts).`);
+    return;
+  }
 
   const demo = await upsertUser("Demo Customer", "6135550100", "demo@rabbit.test", "rabbit-demo", "customer");
   const admin = await upsertUser("Rabbit Admin", "6135550199", "admin@rabbit.test", "rabbit-admin", "admin");
