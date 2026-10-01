@@ -1,0 +1,12 @@
+node_modules
+.next
+.git
+.env*
+storage-files
+storage-files-test
+src/generated
+tests
+*.tsbuildinfo
+.agents
+.claude
+.windsurf
