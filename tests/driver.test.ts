@@ -76,6 +76,11 @@ describe("driver app", () => {
     expect(onTheWay.body.driver_location).toMatchObject({ latitude: 45.4215, longitude: -75.699 });
     expect(onTheWay.body.picked_up_at).not.toBeNull();
 
+    // Contactless: no delivering without a doorstep photo.
+    const noPhoto = await call(deliver, { token: driver.token, params: { id: order.id } });
+    expect(noPhoto.status).toBe(409);
+    expect(noPhoto.body.message).toMatch(/photo/);
+    await db.order.update({ where: { id: order.id }, data: { deliveryPhoto: `orders/${order.id}/doorstep.jpg` } });
     expect((await call(deliver, { token: driver.token, params: { id: order.id } })).body.status).toBe("delivered");
     const delivered = await call(customerOrder, { method: "GET", token: customer.token, params: { id: order.id } });
     expect(delivered.body.driver_location).toBeNull();
