@@ -24,6 +24,7 @@ export async function deleteAccount(userId: number) {
         passwordHash: null,
         phoneVerifiedAt: null,
         stripeCustomerId: null,
+        googleSub: null,
       },
     }),
   ]);

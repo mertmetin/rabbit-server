@@ -1,6 +1,7 @@
 import bcrypt from "bcryptjs";
 import { SignJWT, jwtVerify } from "jose";
 import type { User } from "@/generated/prisma/client";
+import type { GoogleProfile } from "./google";
 import { db } from "./db";
 import { forbidden, unauthorized } from "./http";
 
@@ -23,6 +24,27 @@ export function signToken(user: User) {
     .setIssuedAt()
     .setExpirationTime(TOKEN_TTL)
     .sign(secret());
+}
+
+// A Google account waiting to be linked while the customer confirms their
+// phone by SMS. Short-lived, and only accepted by /api/auth/verify.
+export function signLinkToken(google: GoogleProfile) {
+  return new SignJWT({ purpose: "google-link", email: google.email, name: google.name })
+    .setProtectedHeader({ alg: "HS256" })
+    .setSubject(google.sub)
+    .setIssuedAt()
+    .setExpirationTime("15m")
+    .sign(secret());
+}
+
+export async function readLinkToken(token: string): Promise<GoogleProfile | null> {
+  try {
+    const { payload } = await jwtVerify(token, secret(), { algorithms: ["HS256"] });
+    if (payload.purpose !== "google-link" || !payload.sub) return null;
+    return { sub: payload.sub, email: (payload.email as string | null) ?? null, name: String(payload.name ?? "") };
+  } catch {
+    return null;
+  }
 }
 
 // The active user a token belongs to, or null if it's invalid or expired.

@@ -47,6 +47,7 @@ model User {
   role             Role      @default(customer)
   phoneVerifiedAt  DateTime? @map("phone_verified_at")
   stripeCustomerId String?   @unique @map("stripe_customer_id")
+  googleSub        String?   @unique @map("google_sub") // Google account linked for "Continue with Google"
   // Drivers: whether they're taking orders, and from which store.
   driverOnline     Boolean   @default(false) @map("driver_online")
   driverStoreId    Int?      @map("driver_store_id")
