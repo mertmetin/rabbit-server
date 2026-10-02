@@ -34,7 +34,7 @@ describe("sign in with an SMS code", () => {
     const { token, user } = await signIn();
     expect(user.needs_profile).toBe(true);
     expect(decodeJwt(token)).toMatchObject({ id: user.id, phone: "6135550101" });
-    expect((await call(me, { method: "GET", token })).body).toMatchObject({ id: user.id, active: true });
+    expect((await call(me, { method: "GET", token })).body).toMatchObject({ id: user.id, active: true, first_order: true });
   });
 
   it("completing the profile returns a fresh token with the name in it", async () => {
