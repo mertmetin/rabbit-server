@@ -75,7 +75,50 @@ describe("checkout", () => {
       ] },
     });
     expect(res.body).toEqual({
-      subtotal: 24.53, tax: 0.6, delivery_fee: 0, total: 25.13, min_order: 20, meets_minimum: true,
+      subtotal: 24.53, tax: 0.6, delivery_fee: 0, delivery_reason: "first_order",
+      standard_delivery_fee: 4.99, free_delivery_over: 40, total: 25.13, min_order: 20, meets_minimum: true,
+    });
+  });
+
+  describe("delivery fee", () => {
+    // An earlier paid order, so the next one isn't the customer's first.
+    const pastOrder = (userId: number, storeId: number, addressId: number, status: "delivered" | "cancelled" | "pending_payment" = "delivered") =>
+      db.order.create({
+        data: { userId, storeId, addressId, status, deliveryAddress: {}, subtotalCents: 2500, taxCents: 0, totalCents: 2500 },
+      });
+    const quoteFor = (ctx: Awaited<ReturnType<typeof setup>>, items: { product_id: number; quantity: number }[]) =>
+      call(quote, { token: ctx.token, body: { store_id: ctx.centre.id, address_id: ctx.address.id, items } });
+
+    it("charges $4.99 after the first order, taxing the fee like the basket", async () => {
+      const ctx = await setup();
+      await pastOrder(ctx.user.id, ctx.centre.id, ctx.address.id);
+      await db.product.update({ where: { id: ctx.carrots.id }, data: { taxable: true } });
+
+      // $19.95 zero-rated apples + $4.58 taxable carrots: 18.67% of the basket
+      // is taxable, so HST applies to that share of the $4.99 fee too.
+      const res = await quoteFor(ctx, [{ product_id: ctx.apples.id, quantity: 5 }, { product_id: ctx.carrots.id, quantity: 2 }]);
+      expect(res.body).toMatchObject({ subtotal: 24.53, delivery_fee: 4.99, delivery_reason: "standard", tax: 0.72, total: 30.24 });
+    });
+
+    it("is free from $40, and abandoned or cancelled checkouts don't use up the first order", async () => {
+      const ctx = await setup();
+      await pastOrder(ctx.user.id, ctx.centre.id, ctx.address.id, "cancelled");
+      await pastOrder(ctx.user.id, ctx.centre.id, ctx.address.id, "pending_payment");
+      expect((await quoteFor(ctx, [{ product_id: ctx.apples.id, quantity: 6 }])).body.delivery_reason).toBe("first_order");
+
+      await pastOrder(ctx.user.id, ctx.centre.id, ctx.address.id);
+      const big = await quoteFor(ctx, [{ product_id: ctx.apples.id, quantity: 11 }]); // $43.89
+      expect(big.body).toMatchObject({ delivery_fee: 0, delivery_reason: "over_threshold", total: 43.89 });
+    });
+
+    it("the fee is charged and kept on the order", async () => {
+      const ctx = await setup();
+      await pastOrder(ctx.user.id, ctx.centre.id, ctx.address.id);
+      const res = await call(placeOrder, {
+        token: ctx.token,
+        body: { payment_method_id: "pm_card", store_id: ctx.centre.id, address_id: ctx.address.id, items: [{ product_id: ctx.apples.id, quantity: 6 }] },
+      });
+      expect(res.body).toMatchObject({ order: { subtotal: 23.94, delivery_fee: 4.99, total: 28.93 } });
     });
   });
 

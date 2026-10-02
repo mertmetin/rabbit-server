@@ -253,6 +253,7 @@ model Order {
   deliveryAddress       Json        @map("delivery_address")
   subtotalCents         Int         @map("subtotal_cents")
   taxCents              Int         @map("tax_cents")
+  deliveryFeeCents      Int         @default(0) @map("delivery_fee_cents")
   totalCents            Int         @map("total_cents")
   stripePaymentIntentId String?     @unique @map("stripe_payment_intent_id")
   notes                 String?     @db.Text

@@ -3,7 +3,8 @@ import Stripe from "stripe";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { ApiError, readJson, route } from "@/lib/http";
-import { basketSchema, deliveryContext, MIN_ORDER_CENTS, orderJson, priceBasket, releaseAbandonedOrders, restock } from "@/lib/orders";
+import { MIN_ORDER_CENTS } from "@/lib/delivery";
+import { basketSchema, deliveryContext, orderJson, priceBasket, releaseAbandonedOrders, restock } from "@/lib/orders";
 import { stripe, stripeCustomerId } from "@/lib/stripe";
 import { addressJson } from "@/lib/serialize";
 
@@ -36,7 +37,7 @@ export const POST = route(async (req) => {
 
   const order = await db.$transaction(async (tx) => {
     const { address } = await deliveryContext(tx, user.id, body.store_id, body.address_id);
-    const priced = await priceBasket(tx, body.store_id, body.items, address.provinceCode);
+    const priced = await priceBasket(tx, user.id, body.store_id, body.items, address.provinceCode);
     if (priced.subtotal < MIN_ORDER_CENTS) {
       throw new ApiError(400, `The minimum order is $${(MIN_ORDER_CENTS / 100).toFixed(2)}.`);
     }
@@ -58,6 +59,7 @@ export const POST = route(async (req) => {
         deliveryAddress: addressJson(address),
         subtotalCents: priced.subtotal,
         taxCents: priced.tax,
+        deliveryFeeCents: priced.delivery.cents,
         totalCents: priced.total,
         notes: body.notes || null,
         contactless: body.contactless,

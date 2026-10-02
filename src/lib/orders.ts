@@ -4,9 +4,8 @@ import { ApiError, badRequest, notFound } from "./http";
 import { taxCents } from "./tax";
 import { distanceKm } from "./geo";
 import { db } from "./db";
+import { deliveryFee, isFirstOrder } from "./delivery";
 import { stripe } from "./stripe";
-
-export const MIN_ORDER_CENTS = Number(process.env.MIN_ORDER_CENTS ?? 2000);
 
 export const basketSchema = z.object({
   store_id: z.number().int().positive(),
@@ -18,8 +17,9 @@ export const basketSchema = z.object({
 
 type Tx = Prisma.TransactionClient;
 
-// Prices a basket from the database (never from the client) and checks stock.
-export async function priceBasket(tx: Tx, storeId: number, items: { product_id: number; quantity: number }[], provinceCode: string) {
+// Prices a basket from the database (never from the client) and checks stock,
+// including this customer's delivery fee.
+export async function priceBasket(tx: Tx, userId: number, storeId: number, items: { product_id: number; quantity: number }[], provinceCode: string) {
   const merged = new Map<number, number>();
   for (const { product_id, quantity } of items) merged.set(product_id, (merged.get(product_id) ?? 0) + quantity);
 
@@ -46,8 +46,13 @@ export async function priceBasket(tx: Tx, storeId: number, items: { product_id: 
 
   const subtotal = lines.reduce((sum, l) => sum + l.unitPriceCents * l.quantity, 0);
   const taxable = lines.filter((l) => l.taxable).reduce((sum, l) => sum + l.unitPriceCents * l.quantity, 0);
-  const tax = taxCents(taxable, provinceCode);
-  return { lines, subtotal, tax, total: subtotal + tax };
+  const delivery = deliveryFee(subtotal, await isFirstOrder(tx, userId));
+  // The delivery fee is taxed like what it delivers: in proportion to the
+  // taxable share of the basket (basic groceries are zero-rated).
+  // To be confirmed by an accountant before launch.
+  const taxableFee = subtotal > 0 ? (delivery.cents * taxable) / subtotal : 0;
+  const tax = taxCents(taxable + taxableFee, provinceCode);
+  return { lines, subtotal, tax, delivery, total: subtotal + delivery.cents + tax };
 }
 
 // The user's address, and the store, checked to be able to deliver to it.
@@ -83,7 +88,7 @@ export function orderJson(order: Order & { items: OrderItem[] }) {
     no_bell: order.noBell,
     subtotal: order.subtotalCents / 100,
     tax: order.taxCents / 100,
-    delivery_fee: 0,
+    delivery_fee: order.deliveryFeeCents / 100,
     total: order.totalCents / 100,
     items: order.items.map((i) => ({
       product_id: i.productId,
