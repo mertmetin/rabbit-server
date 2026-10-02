@@ -29,23 +29,26 @@ describe("closest store", () => {
     expect((await get(closest, "/api/stores/closest?lat=45.4700&lng=-75.5100")).body.id).toBe(east.id);
   });
 
-  it("estimates delivery time, later when orders are waiting", async () => {
+  it("estimates delivery time from distance, basket size and the orders ahead", async () => {
     const { centre } = await makeCatalog();
-    const nearby = "/api/stores/closest?lat=45.4236&lng=-75.7009"; // ~0.5 km
-    expect((await get(closest, nearby)).body).toMatchObject({ eta_min: 30, eta_max: 60 });
+    const nearby = "/api/stores/closest?lat=45.4236&lng=-75.7009"; // ~0.4 km
+    // Typical 10-product basket: 17.5 min shopping + 6 min driving
+    expect((await get(closest, nearby)).body).toMatchObject({ eta_min: 25, eta_max: 45 });
+    // 30 products: 32.5 + 6 = 38.5
+    expect((await get(closest, `${nearby}&products=30`)).body).toMatchObject({ eta_min: 40, eta_max: 60 });
 
     const customer = await makeUser();
     const order = (status: "placed" | "preparing" | "delivered", hoursAgo = 0) =>
       db.order.create({ data: {
         userId: customer.user.id, storeId: centre.id, status, placedAt: new Date(Date.now() - hoursAgo * 3600_000),
-        deliveryAddress: {}, subtotalCents: 2000, taxCents: 0, totalCents: 2000,
+        deliveryAddress: { latitude: 45.4236, longitude: -75.7009 }, subtotalCents: 2000, taxCents: 0, totalCents: 2000,
       } });
     await order("placed");
     await order("preparing");
     await order("delivered"); // already gone
     await order("preparing", 5); // forgotten: too old to count
-    // Two orders still ahead: 25 + 1.5 + 5 + 30 = 61.5 -> 60
-    expect((await get(closest, nearby)).body).toMatchObject({ eta_min: 60, eta_max: 90 });
+    // Each order ahead: shopping (10.75) + round trip (2 x 6) - one handover = ~17.7; two -> 35.3 + 23.5 = 58.8
+    expect((await get(closest, nearby)).body).toMatchObject({ eta_min: 60, eta_max: 80 });
   });
 
   it("returns null when no store delivers there", async () => {
