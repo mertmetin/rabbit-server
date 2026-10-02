@@ -6,6 +6,7 @@ import { GET as driverOrders } from "@/app/api/driver/orders/route";
 import { POST as accept } from "@/app/api/driver/orders/[id]/accept/route";
 import { POST as pickup } from "@/app/api/driver/orders/[id]/pickup/route";
 import { POST as deliver } from "@/app/api/driver/orders/[id]/deliver/route";
+import { POST as shopped } from "@/app/api/driver/orders/[id]/shopped/route";
 import { POST as location } from "@/app/api/driver/location/route";
 import { GET as customerOrder } from "@/app/api/orders/[id]/route";
 import { makeCatalog, makeUser } from "./factories";
@@ -56,11 +57,13 @@ describe("driver app", () => {
     const order = await newOrder();
     await goOnline();
 
-    expect((await call(accept, { token: driver.token, params: { id: order.id } })).body.status).toBe("placed");
-    // Can't pick up before the store has packed it.
+    // Accepting starts the shopping: the customer sees "preparing".
+    const accepted = await call(accept, { token: driver.token, params: { id: order.id } });
+    expect(accepted.body.status).toBe("preparing");
+    // Can't take it out before it's been shopped.
     expect((await call(pickup, { token: driver.token, params: { id: order.id } })).status).toBe(409);
-    await advanceOrder(order.id); // preparing
-    await advanceOrder(order.id); // ready
+    const done = await call(shopped, { token: driver.token, params: { id: order.id }, body: { items: [{ id: accepted.body.items[0].id, found_quantity: 6 }] } });
+    expect(done.body).toMatchObject({ status: "ready", charged: true });
 
     // Location before pickup isn't stored anywhere.
     expect((await call(location, { token: driver.token, body: { latitude: 45.42, longitude: -75.70 } })).body.tracking).toBe(false);
@@ -74,9 +77,9 @@ describe("driver app", () => {
     expect(onTheWay.body.picked_up_at).not.toBeNull();
 
     expect((await call(deliver, { token: driver.token, params: { id: order.id } })).body.status).toBe("delivered");
-    const done = await call(customerOrder, { method: "GET", token: customer.token, params: { id: order.id } });
-    expect(done.body.driver_location).toBeNull();
-    expect(done.body.delivered_at).not.toBeNull();
+    const delivered = await call(customerOrder, { method: "GET", token: customer.token, params: { id: order.id } });
+    expect(delivered.body.driver_location).toBeNull();
+    expect(delivered.body.delivered_at).not.toBeNull();
     expect((await call(driverOrders, { method: "GET", token: driver.token })).body.mine).toEqual([]);
   });
 

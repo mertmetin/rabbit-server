@@ -5,7 +5,7 @@ import { markPaid, orderJson } from "@/lib/orders";
 import { stripe } from "@/lib/stripe";
 
 // Called by the app after the payment sheet closes. Stripe is the source of
-// truth: the order is only placed if its payment actually succeeded.
+// truth: the order is only placed once its card is authorized.
 export const POST = route(async (req, ctx: RouteContext<"/api/orders/[id]/confirm">) => {
   const user = await requireUser(req);
   const id = await idParam(ctx);
@@ -15,7 +15,8 @@ export const POST = route(async (req, ctx: RouteContext<"/api/orders/[id]/confir
   if (!order.stripePaymentIntentId) throw new ApiError(409, "This order has no payment.");
 
   const intent = await stripe().paymentIntents.retrieve(order.stripePaymentIntentId);
-  if (intent.status !== "succeeded" && intent.status !== "processing") {
+  // requires_capture: authorized, to be charged after shopping.
+  if (intent.status !== "requires_capture" && intent.status !== "succeeded" && intent.status !== "processing") {
     throw new ApiError(402, "The payment hasn't gone through yet.");
   }
 

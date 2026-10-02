@@ -24,7 +24,8 @@ export async function POST(req: Request) {
     const order = await db.order.findUnique({ where: { stripePaymentIntentId: intent.id }, include: { items: true } });
 
     if (order && order.status === "pending_payment") {
-      if (event.type === "payment_intent.succeeded") {
+      // amount_capturable_updated: the card is authorized (charged after shopping).
+      if (event.type === "payment_intent.amount_capturable_updated" || event.type === "payment_intent.succeeded") {
         await markPaid(order.id);
       } else if (event.type === "payment_intent.payment_failed" || event.type === "payment_intent.canceled") {
         await cancelOrder(order); // releases the reserved stock

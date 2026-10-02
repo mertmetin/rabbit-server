@@ -7,6 +7,8 @@ export const POST = route(async (req, ctx: RouteContext<"/api/driver/orders/[id]
   const order = await findDriverOrder(driver, await idParam(ctx));
   if (order.driverId !== driver.id) throw new ApiError(403, "This isn't your order.");
   if (order.status !== "ready") throw new ApiError(409, "The store hasn't marked this order ready yet.");
+  // Charged after shopping; never take out an order that hasn't been.
+  if (order.stripePaymentIntentId && !order.capturedAt) throw new ApiError(409, "Finish shopping first, so the customer is charged.");
 
   await transition(order.id, { driverId: driver.id, status: "ready" }, { status: "out_for_delivery", pickedUpAt: new Date() }, "This order was just updated. Refresh and try again.");
   return Response.json(driverOrderJson(await findDriverOrder(driver, order.id)));

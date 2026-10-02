@@ -87,6 +87,9 @@ export function orderJson(order: Order & { items: OrderItem[] }) {
     notes: order.notes,
     contactless: order.contactless,
     no_bell: order.noBell,
+    substitutions: order.substitutions,
+    // false: the card is only authorized; the found amount is charged after shopping.
+    charged: order.capturedAt !== null,
     subtotal: order.subtotalCents / 100,
     tax: order.taxCents / 100,
     delivery_fee: order.deliveryFeeCents / 100,
@@ -96,7 +99,9 @@ export function orderJson(order: Order & { items: OrderItem[] }) {
       title: i.title,
       unit_price: i.unitPriceCents / 100,
       quantity: i.quantity,
-      line_total: (i.unitPriceCents * i.quantity) / 100,
+      // After shopping: how many were found (and charged); null before.
+      found_quantity: i.foundQuantity,
+      line_total: (i.unitPriceCents * (i.foundQuantity ?? i.quantity)) / 100,
     })),
     placed_at: order.placedAt,
     picked_up_at: order.pickedUpAt,

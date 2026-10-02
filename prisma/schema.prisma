@@ -28,6 +28,12 @@ enum CodePurpose {
   login
 }
 
+// What to do when an item can't be found while shopping.
+enum Substitutions {
+  similar // replace with something similar, at no more than the original price
+  skip // leave it out (not charged)
+}
+
 enum OrderStatus {
   pending_payment
   placed
@@ -254,6 +260,10 @@ model Order {
   subtotalCents         Int         @map("subtotal_cents")
   taxCents              Int         @map("tax_cents")
   deliveryFeeCents      Int         @default(0) @map("delivery_fee_cents")
+  // Checkout authorizes the card; the amount actually found is charged after
+  // shopping (capturedAt). The totals above are then the final ones.
+  substitutions         Substitutions @default(similar)
+  capturedAt            DateTime?   @map("captured_at")
   totalCents            Int         @map("total_cents")
   stripePaymentIntentId String?     @unique @map("stripe_payment_intent_id")
   notes                 String?     @db.Text
@@ -291,6 +301,7 @@ model OrderItem {
   title          String // product title at order time
   unitPriceCents Int     @map("unit_price_cents")
   quantity       Int
+  foundQuantity  Int?    @map("found_quantity") // set after shopping; null until then
   taxable        Boolean
 
   order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)

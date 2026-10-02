@@ -25,6 +25,7 @@ const placeSchema = basketSchema.extend({
   notes: z.string().trim().max(500).optional(),
   contactless: z.boolean().default(false),
   no_bell: z.boolean().default(false),
+  substitutions: z.enum(["similar", "skip"]).default("similar"),
 });
 
 // Places an order: prices it, reserves stock, and charges the chosen card.
@@ -64,6 +65,7 @@ export const POST = route(async (req) => {
         notes: body.notes || null,
         contactless: body.contactless,
         noBell: body.no_bell,
+        substitutions: body.substitutions,
         items: { create: priced.lines },
       },
       include: { items: true },
@@ -75,13 +77,16 @@ export const POST = route(async (req) => {
     const method = await stripe().paymentMethods.retrieve(body.payment_method_id);
     if (method.customer !== customer) throw new ApiError(404, "Card not found.");
 
-    // Charge the chosen saved card now. If the bank wants 3-D Secure, the
-    // intent comes back as requires_action and the app shows Stripe's prompt.
+    // Authorize the chosen saved card for the checkout total now; what was
+    // actually found is charged after shopping (lib/shopping.ts). If the bank
+    // wants 3-D Secure, the intent comes back as requires_action and the app
+    // shows Stripe's prompt.
     const intent = await stripe().paymentIntents.create({
       amount: order.totalCents,
       currency: "cad",
       customer,
       payment_method: method.id,
+      capture_method: "manual",
       confirm: true,
       payment_method_types: ["card"],
       description: `Rabbit order #${order.id}`,

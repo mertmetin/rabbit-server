@@ -15,7 +15,9 @@ export const POST = route(async (req, ctx: RouteContext<"/api/driver/orders/[id]
   await transition(
     order.id,
     { driverId: null, status: { in: [...AVAILABLE_STATUSES] } },
-    { driverId: driver.id },
+    // A paid order goes to "preparing": the customer sees it's being shopped
+    // and can no longer cancel it.
+    { driverId: driver.id, ...(order.status === "placed" ? { status: "preparing" as const } : {}) },
     "Another driver just took this order.",
   );
   return Response.json(driverOrderJson(await findDriverOrder(driver, order.id)));
