@@ -16,7 +16,12 @@ export function etaMinutes(distanceKm: number, ordersAhead: number) {
   return { min, max: min + 30 };
 }
 
-// Paid orders at this store that haven't left yet.
-export function ordersAhead(storeId: number) {
-  return db.order.count({ where: { storeId, status: { in: ["placed", "preparing", "ready"] } } });
+// Paid orders at this store that haven't left yet. Only recent ones: an order
+// forgotten in "preparing" shouldn't slow every estimate down forever.
+const QUEUE_WINDOW_MS = 3 * 60 * 60 * 1000;
+
+export function ordersAhead(storeId: number, now = new Date()) {
+  return db.order.count({
+    where: { storeId, status: { in: ["placed", "preparing", "ready"] }, placedAt: { gte: new Date(now.getTime() - QUEUE_WINDOW_MS) } },
+  });
 }

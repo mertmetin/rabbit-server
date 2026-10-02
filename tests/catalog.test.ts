@@ -35,10 +35,16 @@ describe("closest store", () => {
     expect((await get(closest, nearby)).body).toMatchObject({ eta_min: 30, eta_max: 60 });
 
     const customer = await makeUser();
-    for (const status of ["placed", "preparing", "delivered"] as const) {
-      await db.order.create({ data: { userId: customer.user.id, storeId: centre.id, status, deliveryAddress: {}, subtotalCents: 2000, taxCents: 0, totalCents: 2000 } });
-    }
-    // Two orders still ahead (the delivered one doesn't count): 25 + 1.5 + 5 + 30 = 61.5 -> 60
+    const order = (status: "placed" | "preparing" | "delivered", hoursAgo = 0) =>
+      db.order.create({ data: {
+        userId: customer.user.id, storeId: centre.id, status, placedAt: new Date(Date.now() - hoursAgo * 3600_000),
+        deliveryAddress: {}, subtotalCents: 2000, taxCents: 0, totalCents: 2000,
+      } });
+    await order("placed");
+    await order("preparing");
+    await order("delivered"); // already gone
+    await order("preparing", 5); // forgotten: too old to count
+    // Two orders still ahead: 25 + 1.5 + 5 + 30 = 61.5 -> 60
     expect((await get(closest, nearby)).body).toMatchObject({ eta_min: 60, eta_max: 90 });
   });
 
