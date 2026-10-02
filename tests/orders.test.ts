@@ -8,6 +8,7 @@ import { GET as listCards } from "@/app/api/payment/methods/route";
 import { DELETE as removeCard } from "@/app/api/payment/methods/[id]/route";
 import { POST as setupCard } from "@/app/api/payment/setup/route";
 import { makeCatalog, makeUser } from "./factories";
+import { sentSms } from "./setup";
 import { call } from "./helpers";
 
 // A fake Stripe: payments "succeed" unless a test says otherwise.
@@ -139,6 +140,25 @@ describe("checkout", () => {
     const confirmed = await call(confirm, { token, params: { id: res.body.order.id } });
     expect(confirmed.body.status).toBe("placed");
     expect((await call(listOrders, { method: "GET", token })).body).toHaveLength(1);
+  });
+
+  it("texts the order alert phones once when an order is paid", async () => {
+    process.env.ORDER_ALERT_PHONES = "6135550199, 6135550198";
+    try {
+      const { centre, apples, token, address } = await setup();
+      const res = await call(placeOrder, {
+        token, body: { payment_method_id: "pm_card", store_id: centre.id, address_id: address.id, items: [{ product_id: apples.id, quantity: 6 }] },
+      });
+      expect(sentSms).toHaveLength(0); // not until it's paid
+
+      const id = res.body.order.id;
+      await call(confirm, { token, params: { id } });
+      await call(confirm, { token, params: { id } }); // a second confirmation (or the webhook) doesn't repeat it
+      expect(sentSms.map((s) => s.phone)).toEqual(["6135550199", "6135550198"]);
+      expect(sentSms[0].text).toBe(`🐰 New Rabbit order #${id}: $23.94, 6 items, to 110 Laurier Ave W. Open Rabbit Driver to accept.`);
+    } finally {
+      delete process.env.ORDER_ALERT_PHONES;
+    }
   });
 
   it("won't place an order below the $20 minimum", async () => {

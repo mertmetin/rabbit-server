@@ -39,6 +39,10 @@
         {
           "name": "GOOGLE_CLIENT_IDS",
           "value": "484960254228-t9n19sl0l1prml7da1qg5g99pod4il97.apps.googleusercontent.com"
+        },
+        {
+          "name": "ORDER_ALERT_PHONES",
+          "value": "6133278306"
         }
       ],
       "secrets": [

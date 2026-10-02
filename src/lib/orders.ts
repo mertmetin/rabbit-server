@@ -5,6 +5,7 @@ import { taxCents } from "./tax";
 import { distanceKm } from "./geo";
 import { db } from "./db";
 import { deliveryFee, isFirstOrder } from "./delivery";
+import { sendSms } from "./sms";
 import { stripe } from "./stripe";
 
 export const basketSchema = z.object({
@@ -130,12 +131,32 @@ export async function cancelOrder(order: Order & { items: OrderItem[] }) {
 }
 
 // Marks an order paid (idempotent): used by the app's confirm call and the
-// Stripe webhook, whichever arrives first.
+// Stripe webhook, whichever arrives first. Whoever gets there first also
+// sends the new-order alert, so it goes out once.
 export async function markPaid(orderId: number) {
-  await db.order.updateMany({
+  const { count } = await db.order.updateMany({
     where: { id: orderId, status: "pending_payment" },
     data: { status: "placed", placedAt: new Date() },
   });
+  if (count === 1) await alertNewOrder(orderId);
+}
+
+// Texts ORDER_ALERT_PHONES (comma-separated) about a new paid order, so it's
+// seen even with the driver app closed. Never fails the payment it follows.
+async function alertNewOrder(orderId: number) {
+  const phones = (process.env.ORDER_ALERT_PHONES ?? "").split(",").map((p) => p.trim()).filter(Boolean);
+  if (phones.length === 0) return;
+  try {
+    const order = await db.order.findUniqueOrThrow({ where: { id: orderId }, include: { items: true } });
+    const items = order.items.reduce((sum, i) => sum + i.quantity, 0);
+    const address = order.deliveryAddress as { address_line_1?: string } | null;
+    const text =
+      `🐰 New Rabbit order #${order.id}: $${(order.totalCents / 100).toFixed(2)}, ${items} item${items === 1 ? "" : "s"}` +
+      `${address?.address_line_1 ? `, to ${address.address_line_1}` : ""}. Open Rabbit Driver to accept.`;
+    await Promise.all(phones.map((phone) => sendSms(phone, text)));
+  } catch (err) {
+    console.error("New-order alert failed", err);
+  }
 }
 
 export const ABANDONED_AFTER_MS = 30 * 60 * 1000;
