@@ -47,6 +47,8 @@ export function driverOrderJson(order: FullOrder) {
     substitutions: order.substitutions,
     charged: order.capturedAt !== null,
     total: order.totalCents / 100,
+    // Everything the customer tipped (at checkout and after delivery): all of it is the driver's.
+    tip: (order.tipCents + order.extraTipCents) / 100,
     placed_at: order.placedAt,
     picked_up_at: order.pickedUpAt,
     has_photo: Boolean(order.deliveryPhoto),

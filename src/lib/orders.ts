@@ -93,6 +93,10 @@ export function orderJson(order: Order & { items: OrderItem[] }) {
     subtotal: order.subtotalCents / 100,
     tax: order.taxCents / 100,
     delivery_fee: order.deliveryFeeCents / 100,
+    tip: order.tipCents / 100,
+    extra_tip: order.extraTipCents / 100,
+    rating: order.rating,
+    rating_comment: order.ratingComment,
     total: order.totalCents / 100,
     items: order.items.map((i) => ({
       product_id: i.productId,

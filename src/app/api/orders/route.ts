@@ -26,6 +26,8 @@ const placeSchema = basketSchema.extend({
   contactless: z.boolean().default(false),
   no_bell: z.boolean().default(false),
   substitutions: z.enum(["similar", "skip"]).default("similar"),
+  // Driver tip in cents, added to the card hold.
+  tip_cents: z.number().int().min(0).max(10_000).default(0),
 });
 
 // Places an order: prices it, reserves stock, and charges the chosen card.
@@ -61,7 +63,8 @@ export const POST = route(async (req) => {
         subtotalCents: priced.subtotal,
         taxCents: priced.tax,
         deliveryFeeCents: priced.delivery.cents,
-        totalCents: priced.total,
+        tipCents: body.tip_cents,
+        totalCents: priced.total + body.tip_cents,
         notes: body.notes || null,
         contactless: body.contactless,
         noBell: body.no_bell,

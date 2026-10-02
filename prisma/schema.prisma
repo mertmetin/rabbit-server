@@ -263,6 +263,16 @@ model Order {
   // Checkout authorizes the card; the amount actually found is charged after
   // shopping (capturedAt). The totals above are then the final ones.
   substitutions         Substitutions @default(similar)
+  // Tip chosen at checkout: part of the card hold, charged with the order and
+  // never reduced by missing items. All of it goes to the driver.
+  tipCents              Int         @default(0) @map("tip_cents")
+  // After delivery: stars (1-5), an optional comment, and an optional extra
+  // tip charged separately to the same card.
+  rating                Int?
+  ratingComment         String?     @map("rating_comment") @db.Text
+  ratedAt               DateTime?   @map("rated_at")
+  extraTipCents         Int         @default(0) @map("extra_tip_cents")
+  extraTipPaymentIntentId String?   @unique @map("extra_tip_payment_intent_id")
   capturedAt            DateTime?   @map("captured_at")
   totalCents            Int         @map("total_cents")
   stripePaymentIntentId String?     @unique @map("stripe_payment_intent_id")

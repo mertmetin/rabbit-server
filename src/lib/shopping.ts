@@ -6,15 +6,17 @@ import { stripe } from "./stripe";
 import { taxCents } from "./tax";
 
 // After shopping: charge only what was found. The customer never pays more
-// than they authorized at checkout, and the delivery fee stays what it was
-// then (missing items don't add one). HST is recalculated on what's left.
+// than they authorized at checkout, the delivery fee stays what it was then
+// (missing items don't add one), and the tip is kept whole. HST is
+// recalculated on what's left.
 export function finalTotals(order: Order, items: (OrderItem & { foundQuantity: number })[], provinceCode: string) {
   const subtotal = items.reduce((sum, i) => sum + i.unitPriceCents * i.foundQuantity, 0);
   const taxable = items.filter((i) => i.taxable).reduce((sum, i) => sum + i.unitPriceCents * i.foundQuantity, 0);
   const fee = order.deliveryFeeCents;
   const taxableFee = subtotal > 0 ? (fee * taxable) / subtotal : 0;
   const tax = taxCents(taxable + taxableFee, provinceCode);
-  return { subtotal, tax, total: Math.min(subtotal + fee + tax, order.totalCents) };
+  // The tip is kept in full, whatever was missing.
+  return { subtotal, tax, total: Math.min(subtotal + fee + tax + order.tipCents, order.totalCents) };
 }
 
 // `found` maps order item id -> how many were found (0..ordered quantity).
