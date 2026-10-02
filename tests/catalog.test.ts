@@ -29,6 +29,19 @@ describe("closest store", () => {
     expect((await get(closest, "/api/stores/closest?lat=45.4700&lng=-75.5100")).body.id).toBe(east.id);
   });
 
+  it("estimates delivery time, later when orders are waiting", async () => {
+    const { centre } = await makeCatalog();
+    const nearby = "/api/stores/closest?lat=45.4236&lng=-75.7009"; // ~0.5 km
+    expect((await get(closest, nearby)).body).toMatchObject({ eta_min: 30, eta_max: 60 });
+
+    const customer = await makeUser();
+    for (const status of ["placed", "preparing", "delivered"] as const) {
+      await db.order.create({ data: { userId: customer.user.id, storeId: centre.id, status, deliveryAddress: {}, subtotalCents: 2000, taxCents: 0, totalCents: 2000 } });
+    }
+    // Two orders still ahead (the delivered one doesn't count): 25 + 1.5 + 5 + 30 = 61.5 -> 60
+    expect((await get(closest, nearby)).body).toMatchObject({ eta_min: 60, eta_max: 90 });
+  });
+
   it("returns null when no store delivers there", async () => {
     await makeCatalog();
     const res = await get(closest, "/api/stores/closest?lat=43.6532&lng=-79.3832"); // Toronto
