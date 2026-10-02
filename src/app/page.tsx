@@ -3,8 +3,22 @@ import styles from "./page.module.css";
 
 export const dynamic = "force-dynamic";
 
-// Landing page for the backend: what's in the database and where the API lives.
+// Landing page for the backend. In development: what's in the database and
+// where the API lives. In production it's public, so just the name.
 export default async function Home() {
+  if (process.env.NODE_ENV === "production") {
+    return (
+      <main className={styles.page}>
+        <h1 className={styles.title}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo.svg" alt="" width={44} height={44} className={styles.logo} />
+          Rabbit
+        </h1>
+        <p className={styles.muted}>Grocery delivery in Ottawa.</p>
+      </main>
+    );
+  }
+
   const [stores, products, customers, orders] = await Promise.all([
     db.store.count({ where: { active: true } }),
     db.product.count(),
