@@ -5,6 +5,7 @@ import { taxCents } from "./tax";
 import { distanceKm } from "./geo";
 import { db } from "./db";
 import { deliveryFee, isFirstOrder } from "./delivery";
+import { branchesChanged } from "./events";
 import { sendSms } from "./sms";
 import { stripe } from "./stripe";
 
@@ -147,7 +148,10 @@ export async function markPaid(orderId: number) {
     where: { id: orderId, status: "pending_payment" },
     data: { status: "placed", placedAt: new Date() },
   });
-  if (count === 1) await alertNewOrder(orderId);
+  if (count === 1) {
+    branchesChanged(); // the branch's queue grew
+    await alertNewOrder(orderId);
+  }
 }
 
 // Texts ORDER_ALERT_PHONES (comma-separated) about a new paid order, so it's

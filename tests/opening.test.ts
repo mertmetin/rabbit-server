@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { db } from "@/lib/db";
 import { GET as closest } from "@/app/api/stores/closest/route";
+import { GET as stream } from "@/app/api/stores/stream/route";
 import { POST as quote } from "@/app/api/orders/quote/route";
 import { POST as placeOrder } from "@/app/api/orders/route";
 import { PUT as setStatus } from "@/app/api/driver/status/route";
@@ -78,5 +79,48 @@ describe("branches open with their drivers", () => {
     const driver = await makeUser({ role: "driver" });
     await call(setStatus, { method: "PUT", token: driver.token, body: { online: true, store_id: centre.id } });
     expect((await call(placeOrder, { token: customer.token, body })).status).toBe(201);
+  });
+});
+
+describe("live branch status (/api/stores/stream)", () => {
+  // Reads server-sent events until one arrives (or times out).
+  async function nextEvent(reader: ReadableStreamDefaultReader<Uint8Array>, buffer: { text: string }) {
+    const decoder = new TextDecoder();
+    const deadline = Date.now() + 3000;
+    while (Date.now() < deadline) {
+      const end = buffer.text.indexOf("\n\n");
+      if (end >= 0) {
+        const raw = buffer.text.slice(0, end);
+        buffer.text = buffer.text.slice(end + 2);
+        if (raw.startsWith(":")) continue; // heartbeat
+        const data = raw.split("\n").find((l) => l.startsWith("data: "))!.slice(6);
+        return JSON.parse(data);
+      }
+      const { value, done } = await reader.read();
+      if (done) throw new Error("stream ended");
+      buffer.text += decoder.decode(value, { stream: true });
+    }
+    throw new Error("no event");
+  }
+
+  it("pushes the branch opening and closing as the driver goes online and offline", async () => {
+    const { centre } = await makeCatalog();
+    const driver = await makeUser({ role: "driver" });
+    const abort = new AbortController();
+    const res = await stream(new Request(`http://test.local${OVERBROOK.replace("closest", "stream")}`, { signal: abort.signal }), { params: Promise.resolve({}) } as never);
+    expect(res.headers.get("content-type")).toMatch(/text\/event-stream/);
+    const reader = res.body!.getReader();
+    const buffer = { text: "" };
+
+    expect(await nextEvent(reader, buffer)).toMatchObject({ id: centre.id, open: false });
+
+    await call(setStatus, { method: "PUT", token: driver.token, body: { online: true, store_id: centre.id } });
+    expect(await nextEvent(reader, buffer)).toMatchObject({ id: centre.id, open: true, eta_min: expect.any(Number) });
+
+    await call(setStatus, { method: "PUT", token: driver.token, body: { online: false } });
+    expect(await nextEvent(reader, buffer)).toMatchObject({ id: centre.id, open: false });
+
+    abort.abort();
+    await reader.cancel();
   });
 });

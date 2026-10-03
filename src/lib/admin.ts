@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { OrderStatus } from "@/generated/prisma/client";
 import { db } from "./db";
+import { branchesChanged } from "./events";
 import { ApiError, notFound } from "./http";
 import { cancelOrder } from "./orders";
 import { normalizePhone } from "./phone";
@@ -131,4 +132,5 @@ export async function removeDriver(userId: number) {
   const active = await db.order.count({ where: { driverId: userId, status: { in: ["placed", "preparing", "ready", "out_for_delivery"] } } });
   if (active > 0) throw new ApiError(409, "This driver still has deliveries in progress.");
   await db.user.updateMany({ where: { id: userId, role: "driver" }, data: { role: "customer", driverOnline: false, driverStoreId: null } });
+  branchesChanged();
 }
