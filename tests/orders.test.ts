@@ -77,7 +77,7 @@ describe("checkout", () => {
     });
     expect(res.body).toEqual({
       subtotal: 24.53, tax: 0.6, delivery_fee: 0, delivery_reason: "first_order",
-      standard_delivery_fee: 4.99, free_delivery_over: 40, total: 25.13, min_order: 20, meets_minimum: true,
+      standard_delivery_fee: 3.99, free_delivery_over: 40, total: 25.13, min_order: 20, meets_minimum: true,
       eta_min: 25, eta_max: 45, open: true,
     });
   });
@@ -91,15 +91,15 @@ describe("checkout", () => {
     const quoteFor = (ctx: Awaited<ReturnType<typeof setup>>, items: { product_id: number; quantity: number }[]) =>
       call(quote, { token: ctx.token, body: { store_id: ctx.centre.id, address_id: ctx.address.id, items } });
 
-    it("charges $4.99 after the first order, taxing the fee like the basket", async () => {
+    it("charges $3.99 after the first order, taxing the fee like the basket", async () => {
       const ctx = await setup();
       await pastOrder(ctx.user.id, ctx.centre.id, ctx.address.id);
       await db.product.update({ where: { id: ctx.carrots.id }, data: { taxable: true } });
 
       // $19.95 zero-rated apples + $4.58 taxable carrots: 18.67% of the basket
-      // is taxable, so HST applies to that share of the $4.99 fee too.
+      // is taxable, so HST applies to that share of the $3.99 fee too.
       const res = await quoteFor(ctx, [{ product_id: ctx.apples.id, quantity: 5 }, { product_id: ctx.carrots.id, quantity: 2 }]);
-      expect(res.body).toMatchObject({ subtotal: 24.53, delivery_fee: 4.99, delivery_reason: "standard", tax: 0.72, total: 30.24 });
+      expect(res.body).toMatchObject({ subtotal: 24.53, delivery_fee: 3.99, delivery_reason: "standard", tax: 0.69, total: 29.21 });
     });
 
     it("is free from $40, and abandoned or cancelled checkouts don't use up the first order", async () => {
@@ -120,7 +120,7 @@ describe("checkout", () => {
         token: ctx.token,
         body: { payment_method_id: "pm_card", store_id: ctx.centre.id, address_id: ctx.address.id, items: [{ product_id: ctx.apples.id, quantity: 6 }] },
       });
-      expect(res.body).toMatchObject({ order: { subtotal: 23.94, delivery_fee: 4.99, total: 28.93 } });
+      expect(res.body).toMatchObject({ order: { subtotal: 23.94, delivery_fee: 3.99, total: 27.93 } });
     });
   });
 

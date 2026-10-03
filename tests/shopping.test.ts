@@ -75,12 +75,12 @@ describe("charge after shopping", () => {
   });
 
   it("charges only what was found, with HST recalculated, and keeps the delivery fee", async () => {
-    // Not a first order: $4.99 delivery. 6 x $3.99 apples + 3 x $2.29 taxable carrots.
+    // Not a first order: $3.99 delivery. 6 x $3.99 apples + 3 x $2.29 taxable carrots.
     const { id, driver, accepted, itemId } = await shoppingOrder(
       [{ product: "apples", quantity: 6 }, { product: "carrots", quantity: 3 }], { taxableCarrots: true, pastOrder: true },
     );
-    // 23.94 + 6.87 + 4.99, plus HST on the carrots and their share of the fee: (687 + 499*687/3081) * 13% = 1.04
-    expect(accepted.body.total).toBe(36.84);
+    // 23.94 + 6.87 + 3.99, plus HST on the carrots and their share of the fee: (687 + 399*687/3081) * 13% = 1.01
+    expect(accepted.body.total).toBe(35.81);
 
     // Only 4 apples and 1 carrot in the store.
     const res = await call(shopped, {
@@ -88,12 +88,12 @@ describe("charge after shopping", () => {
       body: { items: [{ id: itemId("Apples"), found_quantity: 4 }, { id: itemId("Carrots"), found_quantity: 1 }] },
     });
     expect(res.status).toBe(200);
-    // 15.96 + 2.29 = 18.25; HST on 2.29 and on the taxable share of the fee: (229 + 499*229/1825) * 13% = 0.38
-    expect(res.body).toMatchObject({ status: "ready", charged: true, total: 23.62 });
-    expect(stripeState.captured).toEqual([{ id: "pi_1", amount: 2362 }]);
+    // 15.96 + 2.29 = 18.25; HST on 2.29 and on the taxable share of the fee: (229 + 399*229/1825) * 13% = 0.36
+    expect(res.body).toMatchObject({ status: "ready", charged: true, total: 22.60 });
+    expect(stripeState.captured).toEqual([{ id: "pi_1", amount: 2260 }]);
 
     const order = await db.order.findUniqueOrThrow({ where: { id }, include: { items: true } });
-    expect(order).toMatchObject({ subtotalCents: 1825, deliveryFeeCents: 499, taxCents: 38, totalCents: 2362 });
+    expect(order).toMatchObject({ subtotalCents: 1825, deliveryFeeCents: 399, taxCents: 36, totalCents: 2260 });
     expect(order.items.map((i) => i.foundQuantity).sort()).toEqual([1, 4]);
   });
 
