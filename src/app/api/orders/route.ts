@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { ApiError, readJson, route } from "@/lib/http";
 import { MIN_ORDER_CENTS } from "@/lib/delivery";
+import { isStoreOpen } from "@/lib/stores";
 import { basketSchema, deliveryContext, orderJson, priceBasket, releaseAbandonedOrders, restock } from "@/lib/orders";
 import { stripe, stripeCustomerId } from "@/lib/stripe";
 import { addressJson } from "@/lib/serialize";
@@ -39,7 +40,10 @@ export const POST = route(async (req) => {
   await releaseAbandonedOrders(new Date(), body.store_id);
 
   const order = await db.$transaction(async (tx) => {
-    const { address } = await deliveryContext(tx, user.id, body.store_id, body.address_id);
+    const { address, store } = await deliveryContext(tx, user.id, body.store_id, body.address_id);
+    if (!(await isStoreOpen(store.id))) {
+      throw new ApiError(409, `${store.name} isn't taking orders right now. Please try again a bit later.`);
+    }
     const priced = await priceBasket(tx, user.id, body.store_id, body.items, address.provinceCode);
     if (priced.subtotal < MIN_ORDER_CENTS) {
       throw new ApiError(400, `The minimum order is $${(MIN_ORDER_CENTS / 100).toFixed(2)}.`);

@@ -2,6 +2,9 @@ import { config } from "dotenv";
 import { afterAll, beforeEach, vi } from "vitest";
 
 config({ path: ".env.test", override: true, quiet: true });
+// Most tests place orders without a driver online; tests/opening.test.ts
+// covers branches opening and closing with their drivers.
+process.env.ORDERING_NEEDS_DRIVER = "false";
 
 // Capture texts instead of sending them; tests read codes from here.
 export const sentSms: { phone: string; text: string }[] = [];

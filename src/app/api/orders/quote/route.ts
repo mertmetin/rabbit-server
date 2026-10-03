@@ -3,6 +3,7 @@ import { requireUser } from "@/lib/auth";
 import { readJson, route } from "@/lib/http";
 import { DELIVERY_FEE_CENTS, FREE_DELIVERY_OVER_CENTS, MIN_ORDER_CENTS } from "@/lib/delivery";
 import { estimate } from "@/lib/eta";
+import { isStoreOpen } from "@/lib/stores";
 import { distanceKm } from "@/lib/geo";
 import { basketSchema, deliveryContext, priceBasket } from "@/lib/orders";
 
@@ -31,5 +32,7 @@ export const POST = route(async (req) => {
     meets_minimum: priced.subtotal >= MIN_ORDER_CENTS,
     eta_min: eta.min,
     eta_max: eta.max,
+    // false: the branch is closed (no driver online); orders are refused.
+    open: await isStoreOpen(store.id),
   });
 });

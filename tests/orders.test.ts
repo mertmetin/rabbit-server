@@ -78,7 +78,7 @@ describe("checkout", () => {
     expect(res.body).toEqual({
       subtotal: 24.53, tax: 0.6, delivery_fee: 0, delivery_reason: "first_order",
       standard_delivery_fee: 4.99, free_delivery_over: 40, total: 25.13, min_order: 20, meets_minimum: true,
-      eta_min: 25, eta_max: 45,
+      eta_min: 25, eta_max: 45, open: true,
     });
   });
 
