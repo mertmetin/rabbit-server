@@ -1,5 +1,6 @@
 import { driverOrderJson, findDriverOrder, requireDriver, transition } from "@/lib/driver";
 import { ApiError, idParam, route } from "@/lib/http";
+import { delivered } from "@/lib/order-notifications";
 
 // Handed over (or left at the door, with a photo): the order is complete and
 // live location stops.
@@ -18,5 +19,6 @@ export const POST = route(async (req, ctx: RouteContext<"/api/driver/orders/[id]
     { status: "delivered", deliveredAt: new Date(), driverLatitude: null, driverLongitude: null, driverLocatedAt: null },
     "This order was just updated. Refresh and try again.",
   );
+  await delivered(order);
   return Response.json(driverOrderJson(await findDriverOrder(driver, order.id)));
 });

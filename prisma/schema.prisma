@@ -66,6 +66,7 @@ model User {
   orders            Order[]
   deliveries        Order[]       @relation("OrderDriver")
   favorites         Favorite[]
+  pushTokens        PushToken[]
   driverStore       Store?        @relation("DriverStore", fields: [driverStoreId], references: [id], onDelete: SetNull)
 
   @@map("users")
@@ -319,4 +320,20 @@ model OrderItem {
 
   @@index([orderId])
   @@map("order_items")
+}
+
+// A phone that receives push notifications (Expo push token) for the user
+// signed in on it. Moves to whoever signs in on that phone next.
+model PushToken {
+  id        Int      @id @default(autoincrement())
+  userId    Int      @map("user_id")
+  token     String   @unique
+  app       String   @default("customer") // "customer" or "driver"
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("push_tokens")
 }

@@ -6,6 +6,7 @@ import { distanceKm } from "./geo";
 import { db } from "./db";
 import { deliveryFee, isFirstOrder } from "./delivery";
 import { branchesChanged } from "./events";
+import { newOrderForDrivers } from "./order-notifications";
 import { sendSms } from "./sms";
 import { stripe } from "./stripe";
 
@@ -151,6 +152,7 @@ export async function markPaid(orderId: number) {
   if (count === 1) {
     branchesChanged(); // the branch's queue grew
     await alertNewOrder(orderId);
+    await newOrderForDrivers(await db.order.findUniqueOrThrow({ where: { id: orderId }, include: { items: true } }));
   }
 }
 

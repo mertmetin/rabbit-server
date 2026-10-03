@@ -2,6 +2,7 @@ import type { Order, OrderItem } from "@/generated/prisma/client";
 import { db } from "./db";
 import { ApiError } from "./http";
 import { cancelOrder } from "./orders";
+import { nothingFound, shopped } from "./order-notifications";
 import { stripe } from "./stripe";
 import { taxCents } from "./tax";
 
@@ -30,7 +31,11 @@ export async function finishShopping(order: Order & { items: OrderItem[] }, foun
     return { ...item, foundQuantity: count };
   });
 
-  if (items.every((i) => i.foundQuantity === 0)) return cancelOrder(order);
+  if (items.every((i) => i.foundQuantity === 0)) {
+    const cancelled = await cancelOrder(order);
+    await nothingFound(order);
+    return cancelled;
+  }
 
   const address = order.deliveryAddress as { zone_code?: string } | null;
   const totals = finalTotals(order, items, address?.zone_code ?? "ON");
@@ -39,7 +44,7 @@ export async function finishShopping(order: Order & { items: OrderItem[] }, foun
     await stripe().paymentIntents.capture(order.stripePaymentIntentId, { amount_to_capture: totals.total });
   }
 
-  return db.$transaction(async (tx) => {
+  const done = await db.$transaction(async (tx) => {
     for (const item of items) {
       await tx.orderItem.update({ where: { id: item.id }, data: { foundQuantity: item.foundQuantity } });
     }
@@ -49,4 +54,6 @@ export async function finishShopping(order: Order & { items: OrderItem[] }, foun
       include: { items: true },
     });
   });
+  await shopped(done);
+  return done;
 }

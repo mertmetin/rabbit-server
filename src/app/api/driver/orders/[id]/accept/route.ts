@@ -1,6 +1,7 @@
 import { db } from "@/lib/db";
 import { AVAILABLE_STATUSES, MAX_ACTIVE_DELIVERIES, driverOrderJson, findDriverOrder, requireDriver, transition } from "@/lib/driver";
 import { ApiError, idParam, route } from "@/lib/http";
+import { preparing } from "@/lib/order-notifications";
 
 // Take an order. First driver to accept gets it.
 export const POST = route(async (req, ctx: RouteContext<"/api/driver/orders/[id]/accept">) => {
@@ -20,5 +21,6 @@ export const POST = route(async (req, ctx: RouteContext<"/api/driver/orders/[id]
     { driverId: driver.id, ...(order.status === "placed" ? { status: "preparing" as const } : {}) },
     "Another driver just took this order.",
   );
+  if (order.status === "placed") await preparing(order);
   return Response.json(driverOrderJson(await findDriverOrder(driver, order.id)));
 });

@@ -1,6 +1,7 @@
 import { driverOrderJson, findDriverOrder, requireDriver, transition } from "@/lib/driver";
 import { ApiError, idParam, route } from "@/lib/http";
 import { branchesChanged } from "@/lib/events";
+import { onTheWay } from "@/lib/order-notifications";
 
 // Collected from the store: the customer now sees "On the way".
 export const POST = route(async (req, ctx: RouteContext<"/api/driver/orders/[id]/pickup">) => {
@@ -13,5 +14,6 @@ export const POST = route(async (req, ctx: RouteContext<"/api/driver/orders/[id]
 
   await transition(order.id, { driverId: driver.id, status: "ready" }, { status: "out_for_delivery", pickedUpAt: new Date() }, "This order was just updated. Refresh and try again.");
   branchesChanged(); // the branch's queue shrank
+  await onTheWay(order);
   return Response.json(driverOrderJson(await findDriverOrder(driver, order.id)));
 });

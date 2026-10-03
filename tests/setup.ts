@@ -15,7 +15,19 @@ vi.mock("@/lib/sms", () => ({
   smsIsFake: () => false,
 }));
 
+// Capture push notifications instead of sending them.
+export const sentPushes: { to: "customer" | "drivers"; userIds: number[]; title: string; body: string; data?: Record<string, unknown> }[] = [];
+vi.mock("@/lib/push", () => ({
+  pushCustomer: async (userId: number, push: { title: string; body: string; data?: Record<string, unknown> }) => {
+    sentPushes.push({ to: "customer", userIds: [userId], ...push });
+  },
+  pushDrivers: async (userIds: number[], push: { title: string; body: string; data?: Record<string, unknown> }) => {
+    if (userIds.length) sentPushes.push({ to: "drivers", userIds, ...push });
+  },
+}));
+
 beforeEach(async () => {
+  sentPushes.length = 0;
   (await import("@/lib/rate-limit")).resetRateLimits();
   sentSms.length = 0;
   const { db } = await import("@/lib/db");
