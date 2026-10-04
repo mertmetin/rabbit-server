@@ -67,6 +67,7 @@ async function tippedOrder(tipCents = 300) {
 async function deliverIt(id: number, driver: { token: string }, itemId: number, found = 6) {
   await call(shopped, { token: driver.token, params: { id }, body: { items: [{ id: itemId, found_quantity: found }] } });
   await call(pickup, { token: driver.token, params: { id } });
+  await db.order.update({ where: { id }, data: { deliveryPhoto: `orders/${id}/doorstep.jpg` } }); // every delivery has a photo
   await call(deliver, { token: driver.token, params: { id } });
 }
 

@@ -76,7 +76,7 @@ describe("driver app", () => {
     expect(onTheWay.body.driver_location).toMatchObject({ latitude: 45.4215, longitude: -75.699 });
     expect(onTheWay.body.picked_up_at).not.toBeNull();
 
-    // Contactless: no delivering without a doorstep photo.
+    // No delivering without a photo (contactless or not).
     const noPhoto = await call(deliver, { token: driver.token, params: { id: order.id } });
     expect(noPhoto.status).toBe(409);
     expect(noPhoto.body.message).toMatch(/photo/);

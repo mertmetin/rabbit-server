@@ -70,6 +70,7 @@ describe("order notifications", () => {
     const applesLine = accepted.body.items.find((i: { title: string }) => i.title.startsWith("Apples"));
     await call(shopped, { token: driver.token, params: { id }, body: { items: [{ id: applesLine.id, found_quantity: 6 }, { id: carrotsLine.id, found_quantity: 0 }] } });
     await call(pickup, { token: driver.token, params: { id } });
+    await db.order.update({ where: { id }, data: { deliveryPhoto: `orders/${id}/doorstep.jpg` } }); // every delivery has a photo
     await call(deliver, { token: driver.token, params: { id } });
 
     const toCustomer = sentPushes.filter((p) => p.to === "customer");
